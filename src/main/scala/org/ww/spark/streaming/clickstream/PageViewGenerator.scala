@@ -69,7 +69,7 @@ object PageViewGenerator {
           val out = new PrintWriter(socket.getOutputStream, true)
 
           while (true) {
-            Thread.sleep(sleepDelayMs)
+            Thread.sleep(1000)
             out.write(getNextClickEvent())
             out.flush()
           }

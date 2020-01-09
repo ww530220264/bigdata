@@ -11,6 +11,7 @@ object PageViewStream {
         " errorRatePerZipCode, activeUserCount, popularUsersSeen")
       System.exit(1)
     }
+
     val metric = args(0)
     val host = args(1)
     val port = args(2).toInt
@@ -20,14 +21,17 @@ object PageViewStream {
     //      "PageViewStream", Seconds(1),
     //      System.getenv("SPARK_HOME"),
     //      StreamingContext.jarOfClass(this.getClass).toSeq)
-    val ssc = new StreamingContext(sparkConf, Seconds(1))
-
+    //一个batch的连续时间为2s
+    val ssc = new StreamingContext(sparkConf, Seconds(2))
+    //本地运行时可以设置,集群需修改log4j
+    ssc.sparkContext.setLogLevel("ERROR")
+    ssc.checkpoint("../checkpoint")
+    //url status zipCode userID
     val pageViews = ssc.socketTextStream(host, port).flatMap(_.split("\n")).map(PageView.fromString(_))
+    //每个batch的每个url出现的次数
     val pageCounts = pageViews.map(view => view.url).countByValue()
-    val slidingPageCounts = pageViews.map(view => view.url)
-      .countByValueAndWindow(Seconds(10), Seconds(2))
-    val statusesPerZipCode = pageViews.window(Seconds(30), Seconds(2))
-      .map(view => ((view.zipCode, view.status))).groupByKey()
+    val slidingPageCounts = pageViews.map(view => view.url).countByValueAndWindow(Seconds(10), Seconds(4))
+    val statusesPerZipCode = pageViews.window(Seconds(30), Seconds(2)).map(view => ((view.zipCode, view.status))).groupByKey()
     val errorRatePerZipCode = statusesPerZipCode.map {
       case (zip, statuses) =>
         val normalCount = statuses.count(_ == 200)
@@ -39,7 +43,7 @@ object PageViewStream {
           "%s: %s".format(zip, errorRatio)
         }
     }
-    val activeUserCount = pageViews.window(Seconds(15), Seconds(2))
+    val activeUserCount = pageViews.window(Seconds(14), Seconds(2))
       .map(view => (view.userID, 1))
       .groupByKey()
       .count()
