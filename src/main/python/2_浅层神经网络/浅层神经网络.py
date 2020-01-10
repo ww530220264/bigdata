@@ -29,7 +29,7 @@ print(
     '预测准确度是: %d ' % float((np.dot(Y, LR_predictions) + np.dot(1 - Y, 1 - LR_predictions)) / float(Y.size) * 100) + '% ')
 
 plot_decision_boundary(lambda x: clf.predict(x), X, Y.ravel())
-
+plt.show()
 
 def initialize_parameters(n_x, n_h, n_y):
     np.random.seed(2)
@@ -248,6 +248,7 @@ for i,n_h in enumerate(hidden_layer_sizes):
     plt.title("Hidden Layer of size %d" % n_h)
     parameters = nn_model(X, Y, n_h, num_iterations=5000)
     plot_decision_boundary(lambda x: predict(parameters, x.T), X, Y.ravel())
+    plt.show()
     predictions = predict(parameters, X)
     accuracy = float((np.dot(Y, predictions.T) + np.dot(1 - Y, 1 - predictions.T)) / float(Y.size) * 100)
     print ("{}个隐藏层神经元时的准确度是: {} %".format(n_h, accuracy))
