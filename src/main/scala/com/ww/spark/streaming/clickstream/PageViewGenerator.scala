@@ -1,4 +1,4 @@
-package org.ww.spark.streaming.clickstream
+package com.ww.spark.streaming.clickstream
 
 import java.io.PrintWriter
 import java.net.ServerSocket

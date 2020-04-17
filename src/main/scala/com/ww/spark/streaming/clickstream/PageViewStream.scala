@@ -1,4 +1,4 @@
-package org.ww.spark.streaming.clickstream
+package com.ww.spark.streaming.clickstream
 
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.{Seconds, StreamingContext}

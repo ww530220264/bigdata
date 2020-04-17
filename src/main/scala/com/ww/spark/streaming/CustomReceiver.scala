@@ -1,4 +1,4 @@
-package org.ww.spark.streaming
+package com.ww.spark.streaming
 
 import java.io.{BufferedReader, InputStreamReader}
 import java.net.Socket
