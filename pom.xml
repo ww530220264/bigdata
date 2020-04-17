@@ -35,17 +35,26 @@
       <artifactId>spark-core_${scala.version}</artifactId>
       <version>${spark.version}</version>
     </dependency>
+    <!-- Spark Streaming -->
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-streaming_${scala.version}</artifactId>
       <version>${spark.version}</version>
     </dependency>
+    <!-- Spark Streaming Kafka -->
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-streaming-kafka-0-10_${scala.version}</artifactId>
       <version>${spark.version}</version>
     </dependency>
+    <!-- Spark ML-->
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-mllib_2.11</artifactId>
+      <version>2.4.4</version>
+    </dependency>
 
+    <!-- Kafka -->
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka_${scala.version}</artifactId>

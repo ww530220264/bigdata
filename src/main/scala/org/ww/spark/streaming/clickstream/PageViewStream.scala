@@ -30,6 +30,7 @@ object PageViewStream {
     val pageViews = ssc.socketTextStream(host, port).flatMap(_.split("\n")).map(PageView.fromString(_))
     //每个batch的每个url出现的次数
     val pageCounts = pageViews.map(view => view.url).countByValue()
+    //每隔4秒统计最近10秒的出现的url的次数
     val slidingPageCounts = pageViews.map(view => view.url).countByValueAndWindow(Seconds(10), Seconds(4))
     val statusesPerZipCode = pageViews.window(Seconds(30), Seconds(2)).map(view => ((view.zipCode, view.status))).groupByKey()
     val errorRatePerZipCode = statusesPerZipCode.map {
