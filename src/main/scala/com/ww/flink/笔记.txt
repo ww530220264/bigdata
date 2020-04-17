@@ -1,0 +1,56 @@
+一.Flink 程序剖析
+   1)由以下部分组成:
+        a.包含一个执行环境 execution environment
+            val env = getExecutionEnvironment()
+            val env = createLocalEnvironment()
+            val env = createRemoteEnvironment(host: String,port: Int, jarFiles: String*)
+        b.加载或创建初始化数据(source)
+            val input = env.readTextFil("file:///path/to/file")
+        c.在初始化数据上执行一系列转换操作
+            val mapped = input.map{x => x.toInt}
+        d.指定存放计算结果数据的位置(sink)
+            mapped.writeAsText(path: String)
+            mapped.print()
+        e.触发程序的执行(以上的步骤相当于一个执行计划,如果要执行的话需要触发才行)
+            延迟执行:让Flink允许用户构建复杂的运算,然后Flink将他视为一个整体执行计划单元进行执行
+            env.execute()
+            final JobClient jobClient = env.executeAsync()
+            final JobExecutionResult jobExecutionResult = jobClient.getJobExecutionResult(userClassloader).get()
+
+二.API
+   1)所有的DataSet API在这个包下: org.apache.flink.api.scala
+   2)所有的DataStream API在这个包下: org.apache.flink.streaming.api.scala
+        a.write*()方法主要用于调试,不参与checkpointing,如果需要可靠的,exactly-once的将数据传输到文件系统,需要使用flink-connector-filesystem
+        b.通过addSink()添加的自定义实现,会参与到flink的checkpointing以实现exactly-once语义
+
+三.注意事项
+   1)map和mapPartition区别
+        a.map:获取一条数据调用一次func(不会造成内存溢出)
+        b.mapPartition:一次获取一个分区的数据(可能会造成内存溢出),然后调用一次func处理所有的数据
+        总结:如果需要将数据写入外部存储系统,如果使用map的话,那么每次处理一条数据就要创建一个数据库链接,建议采用mapPartition
+   2)语义注解-Semantic Annotations
+        a.Forward fields Annotation 转发字段注解/批注
+        b.广播变量
+        c.分布式缓存-分享静态变量/字典/机器学习回归模型等
+            创建:
+                env.registerCacheFile("hdfs:///path...")
+                env.registerCacheFile("file:///path...")
+            访问:
+                访问缓存文件需要在一个继承了RichFunction的类,因为他需要访问RuntimeContext,getRuntimeContext.getDistributedCache.getFile("hdfsFile")
+        d.传递参数给functions
+            通过构造方法 ds.filter(new MyFilter(2))
+            通过withParameters(Configuration)
+                val c = new Configuration()
+                c.setInteger("limit",2)
+                ds.toFilter(new RichFunction[Int](){
+                    在open方法中通过config.getInteger("limit".0)获取
+                }).withParameters(c)
+            通过全局执行配置
+                conf = new Configuration()
+                conf.setString("myKey","myvalue)
+                env.getConfig.setGlobalJobParameters(conf)
+                在RichFunction中通过open()方法获取:
+                    ExecutionConfig.GlobalJobParameters globalParams =
+                        getRuntimeContext.getExecutionConfig().getGlobalJobParameters()
+                    Configuration globConf = (Configuration)globalParams;
+                    myKey = globConf.get("myKey",null)
