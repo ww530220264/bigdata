@@ -32,6 +32,9 @@ object STREAMING_4_State {
     //  状态后端(配置状态数据保存位置):文件系统/HDFS/Memory/RocksDB
     env.setStateBackend(new FsStateBackend("file:///../../mybackend"))
     //  允许检查点,如果不开启的话,任务异常则Job失败,不会从检查点恢复
+    //  目前Flink对存在迭代Iteration的Job不提供保证,对迭代作业启动检查点将导致异常,为了强制启用检查点,如下操作
+    //  env.enableCheckpointing(interval, CheckpointingMode.EXACTLY_ONCE, force = true).
+    //  注意，在失败期间，迭代循环中的飞行记录边缘（以及与之相关的状态更改）将丢失。
     env.enableCheckpointing(5000)
     //  每次CheckPoint之间最小间隔时间
     env.getCheckpointConfig.setMinPauseBetweenCheckpoints(500)
