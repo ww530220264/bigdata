@@ -1,4 +1,4 @@
-package com.ww.flink.语法
+package com.ww.flink.STREAMING_3_EVENT_TIME$
 
 import org.apache.flink.api.common.functions.{MapFunction, RichMapFunction}
 import org.apache.flink.api.common.operators.Order

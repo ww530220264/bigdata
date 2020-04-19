@@ -1,5 +1,5 @@
 一.Flink 程序剖析
-   1)由以下部分组成:
+    1)由以下部分组成:
         a.包含一个执行环境 execution environment
             val env = getExecutionEnvironment()
             val env = createLocalEnvironment()
@@ -18,17 +18,56 @@
             final JobExecutionResult jobExecutionResult = jobClient.getJobExecutionResult(userClassloader).get()
 
 二.API
-   1)所有的DataSet API在这个包下: org.apache.flink.api.scala
-   2)所有的DataStream API在这个包下: org.apache.flink.streaming.api.scala
+    1)所有的DataSet API在这个包下: org.apache.flink.api.scala
+    2)所有的DataStream API在这个包下: org.apache.flink.streaming.api.scala
         a.write*()方法主要用于调试,不参与checkpointing,如果需要可靠的,exactly-once的将数据传输到文件系统,需要使用flink-connector-filesystem
         b.通过addSink()添加的自定义实现,会参与到flink的checkpointing以实现exactly-once语义
 
-三.注意事项
-   1)map和mapPartition区别
+三.Event-Time/Processing-Time/Ingestion-Time
+    备注:
+        a.Watermark(t)代表在这个数据流中,时间事件已经到达了t.这意味着不会有时间戳比t更旧的事件到达了
+        b.一旦watermark到达了operator,operator会把它内部的事件时间时钟提前到watermark的时间戳
+    1)notions of time in streaming programs 流应用程序中的时间含义
+        a.Processing time 执行响应操作的机器的系统时间
+            eg: 如果一个小时的Procssing time时间窗口,从9:15am开始那么第一个窗口范围为9:15am-10:00am,接下来就是10:00am-11:00am....
+                提供最佳性能好最低延迟,但在分布式和异步环境中不提供确定性
+        b.Event time
+            eg: 时间戳嵌入在数据中,并且时间错可以从数据中心被提取
+                需要指定生成Event Time Watermarks的方法
+        c.Ingestion time
+    2)Watermarks in parallel Streams
+    3)Assigning Timestamps(和Event-Time相关):分配时间戳
+        a.时间戳分配与生成水印密切相关,水印用来告诉系统在事件时间的处理进度
+        b.设置时间戳和生成水印的两种方式
+            直接从流数据源头获取
+            通过时间戳assigner/watermark generator
+            eg:
+                Source Functions with Timestamps and Watermarks
+                Timestamp Assigners / Watermark Generators
+                With Periodic Wateremarks(AssignerWithPeriodicWatermarks)
+                    配置周期时长:ExecutionConfig.setAutoWatermarkInterval(t)
+                    每隔t时间getCurrentWatermark()方法被调用一次,如果返回的watermark不是null并且比之前的watermark大,则该watermarker将被发射
+                With Punctuated Watermarks(AssignerWithPunctuatedWatermarks)
+                    先调用extractTimestamp()
+                    紧接着调用checkAndGetNextWatermark(t),如果返回的watermark不是null并且比上一个watermark大,则该watermarker将被发射
+                Timestamps per Kafka Partition
+                    使用Flink’s Kafka-partition-aware watermark generation
+                预定义的时间戳提取器/水印发射器(Pre-defined Timestamp Extractors / Watermark Emitters)
+                    升序时间戳赋值器(Assigners with ascending timestamps)
+                        AscendingTimestampExtractor
+                    允许一定时间延迟的赋值器(Assigners allowing a fixed amount of lateness)
+                        BoundedOutOfOrdernessTimestampExtractor(TIme.seconds(10))
+
+四.状态和容错(State & Fault Tolerance)
+    1)Working with State
+        a.两种基本状态(Keyed State 和 Operator State)
+
+注意事项
+    1)map和mapPartition区别
         a.map:获取一条数据调用一次func(不会造成内存溢出)
         b.mapPartition:一次获取一个分区的数据(可能会造成内存溢出),然后调用一次func处理所有的数据
         总结:如果需要将数据写入外部存储系统,如果使用map的话,那么每次处理一条数据就要创建一个数据库链接,建议采用mapPartition
-   2)语义注解-Semantic Annotations
+    2)语义注解-Semantic Annotations
         a.Forward fields Annotation 转发字段注解/批注
         b.广播变量
         c.分布式缓存-分享静态变量/字典/机器学习回归模型等

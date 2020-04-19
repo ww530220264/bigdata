@@ -1,4 +1,4 @@
-package com.ww.flink.语法
+package com.ww.flink.STREAMING_3_EVENT_TIME$
 
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.api.scala._
@@ -22,12 +22,18 @@ object STREAMING_1_Overview {
      * 为了使吞吐量最大化,setBufferTimeout(-1)方法将移除超时,只有缓冲区呗填满才会被刷出;
      * 为了最小化延迟,设置timeout为一个接近0的(5或10ms),避免设置为0,因为它会造成性能下降
      */
-      _6  //  Iterator Data Sink
+//      _6  //  Iterator Data Sink
     /**
      * 使用DataStreamUtils收集结果数据,返回一个迭代器,从迭代器获取结果数据
      */
+    _test
   }
 
+  def _test={
+    val stream = env.fromElements((1, 2), (1, 3), (2, 3), (2, 4), (3, 5), (3, 6))
+    stream.keyBy(0).sum(1).printToErr().setParallelism(1)
+    env.execute()
+  }
   def _6={
 
     import org.apache.flink.streaming.api.datastream.DataStreamUtils
@@ -71,7 +77,7 @@ object STREAMING_1_Overview {
         (stillGreaterThanZero, lessThanZero)
       }
     }
-    iteration.print()
+    iteration.printToErr()
     env.execute()
   }
 
