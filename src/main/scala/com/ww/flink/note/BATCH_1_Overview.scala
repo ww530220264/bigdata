@@ -19,7 +19,7 @@ object BATCH_1_Overview {
   val env = ExecutionEnvironment.getExecutionEnvironment
 
   def main(args: Array[String]): Unit = {
-    //  _1  //扩展,支持匿名模式匹配
+    _1 //扩展,支持匿名模式匹配
     //  _2  //Example 输出Sink分区排序
     //  _3  //MapPartition
     //  _4  //Reduce/ReduceGroup
@@ -162,6 +162,7 @@ object BATCH_1_Overview {
     // DataStream
     // import org.apache.flink.streaming.api.scala.extensions.acceptPartialFunctions
 
+    env.setParallelism(3)
     val ds = env.fromElements(Point(1, 2), Point(3, 2),
       Point(3, 4), Point(5, 6))
     ds.filterWith {
@@ -174,8 +175,6 @@ object BATCH_1_Overview {
       case (x, y) => Seq("x" -> x, "y" -> y)
     }.groupingBy {
       case (id, _) => id
-    }.first(10).print()
-
-    //    env.execute()
+    }.first(10).printToErr()
   }
 }

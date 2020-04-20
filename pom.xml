@@ -13,6 +13,8 @@
         <scala.sdk.version>2.11.12</scala.sdk.version>
         <flink.version>1.10.0</flink.version>
         <!--    <kafka.version>0.10.2.0</kafka.version>-->
+        <!--打包配置-->
+        <!--        <jars.scope></jars.scope>-->
     </properties>
 
     <repositories>
@@ -41,6 +43,11 @@
 
     <pluginRepositories>
         <pluginRepository>
+            <id>repo2</id>
+            <name>Human Readable Name for this Mirror.</name>
+            <url>http://repo2.maven.org/maven2/</url>
+        </pluginRepository>
+        <pluginRepository>
             <id>scala-tools.org</id>
             <name>Scala-Tools Maven2 Repository</name>
             <url>http://scala-tools.org/repo-releases</url>
@@ -65,19 +72,19 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.version}</artifactId>
             <version>${spark.version}</version>
-            <scope>provided</scope>
+            <scope>${jars.scope}</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming_${scala.version}</artifactId>
             <version>${spark.version}</version>
-            <scope>provided</scope>
+            <scope>${jars.scope}</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_${scala.version}</artifactId>
             <version>${spark.version}</version>
-            <scope>provided</scope>
+            <scope>${jars.scope}</scope>
         </dependency>
         <!--    <dependency>-->
         <!--      <groupId>org.apache.spark</groupId>-->
@@ -94,38 +101,51 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-scala_${scala.version}</artifactId>
             <version>${flink.version}</version>
-            <!--            <scope>provided</scope>-->
+            <scope>${jars.scope}</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-streaming-scala_${scala.version}</artifactId>
             <version>${flink.version}</version>
-            <!--            <scope>provided</scope>-->
+            <scope>${jars.scope}</scope>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.flink/flink-runtime-web -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-runtime-web_2.11</artifactId>
             <version>1.10.0</version>
-            <!--            <scope>test</scope>-->
+            <scope>${jars.scope}</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-queryable-state-runtime_2.11</artifactId>
             <version>1.10.0</version>
-            <!--            <scope>test</scope>-->
+            <scope>${jars.scope}</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-queryable-state-client-java</artifactId>
             <version>1.10.0</version>
-            <!--            <scope>test</scope>-->
+            <scope>${jars.scope}</scope>
         </dependency>
         <!-- Add connector dependencies here. They must be in the default scope (compile). -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka-0.10_${scala.version}</artifactId>
             <version>${flink.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.scala-lang</groupId>
+            <artifactId>scala-library</artifactId>
+            <version>${scala.sdk.version}</version>
+            <scope>${jars.scope}</scope>
+        </dependency>
+        <!--Java 内存布局-->
+        <dependency>
+            <groupId>org.openjdk.jol</groupId>
+            <artifactId>jol-core</artifactId>
+            <version>0.10</version>
+            <scope>${jars.scope}</scope>
         </dependency>
         <!-- Add logging framework, to produce console output when running in the IDE. -->
         <!-- These dependencies are excluded from the application JAR by default. -->
@@ -142,13 +162,6 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
-            <groupId>org.scala-lang</groupId>
-            <artifactId>scala-library</artifactId>
-            <version>${scala.sdk.version}</version>
-            <!--            <scope>provided</scope>-->
-        </dependency>
-
-        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.4</version>
@@ -156,28 +169,29 @@
         </dependency>
     </dependencies>
 
+    <!--配置打包时,依赖包的作用范围-->
+    <profiles>
+        <profile>
+            <id>local</id>
+            <properties>
+                <jars.scope>compile</jars.scope>
+            </properties>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+        </profile>
+        <profile>
+            <id>pro</id>
+            <properties>
+                <jars.scope>provided</jars.scope>
+            </properties>
+        </profile>
+    </profiles>
+
     <build>
         <sourceDirectory>src/main/scala</sourceDirectory>
-        <testSourceDirectory>src/test/scala</testSourceDirectory>
+        <!--        <testSourceDirectory>src/test/scala</testSourceDirectory>-->
         <plugins>
-            <!--            <plugin>-->
-            <!--                <artifactId>maven-assembly-plugin</artifactId>-->
-            <!--                <configuration>-->
-            <!--                    <descriptorRefs>-->
-            <!--                        <descriptorRef>jar-with-dependencies</descriptorRef>-->
-            <!--                    </descriptorRefs>-->
-            <!--                </configuration>-->
-            <!--                <executions>-->
-            <!--                    <execution>-->
-            <!--                        <id>make-assembly</id> &lt;!&ndash; this is used for inheritance merges &ndash;&gt;-->
-            <!--                        <phase>package</phase> &lt;!&ndash; bind to the packaging phase &ndash;&gt;-->
-            <!--                        <goals>-->
-            <!--                            <goal>single</goal>-->
-            <!--                        </goals>-->
-            <!--                    </execution>-->
-            <!--                </executions>-->
-            <!--            </plugin>-->
-            <!-- We use the maven-shade plugin to create a fat jar that contains all necessary dependencies. -->
             <!-- Change the value of <mainClass>...</mainClass> if your program entry point changes. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -262,7 +276,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.6.1</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>

@@ -1,4 +1,4 @@
-package com.ww.flink.语法
+package com.ww.flink.note
 
 import java.util.concurrent._
 
@@ -13,7 +13,7 @@ import org.apache.flink.runtime.query.UnknownKvStateLocation
 object STREAMING_4_Query_state {
 
   def main(args: Array[String]): Unit = {
-    _query_state("2d1fc89895db1e6e3cb5e513d530152f", "query-name")
+    _query_state("68a04588abb8f3f60e1c3f08ad45d3c1", "query-name")
   }
 
   def _query_state(jobId: String, queryName: String): Unit = {
