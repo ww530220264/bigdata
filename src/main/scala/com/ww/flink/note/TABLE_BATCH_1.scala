@@ -1,10 +1,7 @@
-package com.ww.flink
+package com.ww.flink.note
 
-import org.apache.flink.api.scala.ExecutionEnvironment
+import org.apache.flink.api.scala.{ExecutionEnvironment, _}
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
-import org.apache.flink.table.api.{EnvironmentSettings, TableEnvironment}
-import org.apache.flink.table.api.scala.{BatchTableEnvironment, StreamTableEnvironment}
-import org.apache.flink.api.scala._
 import org.apache.flink.types.Row
 
 case class Person(age: Int, job: String, marital: String)

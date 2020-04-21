@@ -7,26 +7,35 @@ import org.openjdk.jol.info.ClassLayout
 
 object Lock {
   def main(args: Array[String]): Unit = {
-//    _cas
+    //    _cas
     _synchronized
   }
 
-  def _synchronized={
+  def _synchronized = {
     /**
      * 对象内存布局(可以使用工具包JOL):
-     *             markword:
-     *                      锁信息:
-     *                            偏向锁
-     *                            轻量级锁
-     *                            重量级锁
-     *                      gc信息[分代年龄]
-     *                      hashcode
-     *             class pointer[指向T.class]
-     *             instance data[实例数据|成员数据]
-     *             byte for alignment(用作字节对齐,每8个字节)
+     * markword:
+               * 锁信息:
+                     * 偏向锁
+                     * 轻量级锁
+                     * 重量级锁
+               * gc信息[分代年龄]
+               * hashcode
+     * class pointer[指向T.class]
+     * instance data[实例数据|成员数据]
+     * byte for alignment(用作字节对齐,每8个字节)
      */
     val o = new Object()
     System.err.println(ClassLayout.parseInstance(o).toPrintable)
+
+    case class People(name: String)
+    val p = People("wangweiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    System.err.println(ClassLayout.parseInstance(p).toPrintable)
+
+    case class People1(age: Long)
+    val p1 = People1(123)
+    System.err.println(ClassLayout.parseInstance(p1).toPrintable)
+
 
   }
 

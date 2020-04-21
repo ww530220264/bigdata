@@ -13,8 +13,6 @@
         <scala.sdk.version>2.11.12</scala.sdk.version>
         <flink.version>1.10.0</flink.version>
         <!--    <kafka.version>0.10.2.0</kafka.version>-->
-        <!--打包配置-->
-        <!--        <jars.scope></jars.scope>-->
     </properties>
 
     <repositories>
@@ -109,31 +107,66 @@
             <version>${flink.version}</version>
             <scope>${jars.scope}</scope>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.apache.flink/flink-runtime-web -->
+        <!-- ######################### Flink WebUI 支持 #########################-->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-runtime-web_2.11</artifactId>
-            <version>1.10.0</version>
+            <version>${flink.version}</version>
             <scope>${jars.scope}</scope>
         </dependency>
+        <!-- ######################### Flink WebUI 支持 #########################-->
+
+        <!-- ######################### Flink State 支持 #########################-->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-queryable-state-runtime_2.11</artifactId>
-            <version>1.10.0</version>
+            <version>${flink.version}</version>
             <scope>${jars.scope}</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-queryable-state-client-java</artifactId>
-            <version>1.10.0</version>
+            <version>${flink.version}</version>
             <scope>${jars.scope}</scope>
         </dependency>
-        <!-- Add connector dependencies here. They must be in the default scope (compile). -->
+        <!-- ######################### Flink State 支持 #########################-->
+
+        <!-- ######################### Flink Table  #########################-->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-api-scala-bridge_2.11</artifactId>
+            <version>${flink.version}</version>
+            <scope>${jars.scope}</scope>
+        </dependency>
+        <!-- Either... (for the old planner that was available before Flink 1.9) -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-planner_2.11</artifactId>
+            <version>${flink.version}</version>
+            <scope>${jars.scope}</scope>
+        </dependency>
+        <!-- or.. (for the new Blink planner) -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-planner-blink_2.11</artifactId>
+            <version>${flink.version}</version>
+            <scope>${jars.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-common</artifactId>
+            <version>${flink.version}</version>
+            <scope>${jars.scope}</scope>
+        </dependency>
+        <!-- ######################### Flink Table  #########################-->
+
+        <!-- ######################### Flink Connector #########################-->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka-0.10_${scala.version}</artifactId>
             <version>${flink.version}</version>
         </dependency>
+        <!-- ######################### Flink Connector #########################-->
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>
