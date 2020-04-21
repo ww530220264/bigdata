@@ -49,6 +49,7 @@ object STREAMING_4_Query_state {
             ex.getCause match {
               case e1: UnknownKeyOrNamespaceException => {
                 e1.printStackTrace()
+                Thread.sleep(1000)
                 System.err.println("查询的指标暂时没有值....")
               }
               case e2: UnknownKvStateLocation => {
@@ -59,9 +60,11 @@ object STREAMING_4_Query_state {
               }
               case e3: RuntimeException => {
                 e3.printStackTrace()
+                Thread.sleep(5000)
                 System.err.println("查询链接异常,请检查相关服务运行状态!")
               }
               case _: Exception => {
+                Thread.sleep(5000)
                 System.err.println("系统异常,请联系管理员!")
               }
             }
