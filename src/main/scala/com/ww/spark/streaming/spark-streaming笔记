@@ -4,7 +4,7 @@
 4.数据源Socket/Kafka/Flume/HDFS/ZeroMQ/Twitter/MQTT等
 5.输出源HDFS/Databases/Dashboards等[print/saveAsObjectFile/saveAsTextFiles/saveAsHadoopFiles/foreachRDD],foreachRDD是对DStream中的每个RDD进行操作
 
-原理:
+***原理:***
     a.把输入的数据流用时间切片的方式把数据分成一个个小小的Batch,然后将这些小的Batch交给Spark引擎处理
     b.核心就是DStream[离散数据流],就是一系列RDD的集合,随着时间的流逝RDD不断产生,产生的RDD都会被DStream管理和计算
     c.主要运行场景:

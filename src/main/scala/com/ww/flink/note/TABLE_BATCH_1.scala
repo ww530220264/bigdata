@@ -1,9 +1,18 @@
 package com.ww.flink.note
 
-import org.apache.flink.api.scala.{ExecutionEnvironment, _}
+import org.apache.flink.api.scala.{ExecutionEnvironment}
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
+import org.apache.flink.table.api.{EnvironmentSettings, TableEnvironment}
+import org.apache.flink.table.api.scala.{BatchTableEnvironment, StreamTableEnvironment}
 import org.apache.flink.types.Row
 
+/**
+ * Table API 使用(')符号来引用table的属性,Table使用scala的隐式转换,需要import如下两个地方的类库
+ * import org.apache.flink.table.api.scala._
+ * import org.apache.flink.api.scala._
+ */
+import org.apache.flink.table.api.scala._
+import org.apache.flink.api.scala._
 case class Person(age: Int, job: String, marital: String)
 
 object TABLE_BATCH_1 {
@@ -22,21 +31,20 @@ object TABLE_BATCH_1 {
     //  数据加载/清洗
     val dataSetEnv = ExecutionEnvironment.getExecutionEnvironment
     val dataset = dataSetEnv.readTextFile(
-      "W:\\workspace\\bigdata\\src\\main\\scala\\com\\ww\\data\\bank.csv"
+      "E:\\workspace\\bigdata\\src\\main\\resources\\data\\bank.csv"
     ).filter(!_.startsWith("\"age\""))
       .map(_.replace("\"", ""))
       .map(_.split(";"))
       .map(x => Person(x(0).toInt, x(1), x(2)))
 
-    //创建tableEnv
+    //  创建tableEnv
     val fbEnv = ExecutionEnvironment.getExecutionEnvironment
     val tableEnv = BatchTableEnvironment.create(fbEnv)
-    //    tableEnv.fromDataSet(dataset,ArrayElement)
-    //    tableEnv.createTemporaryView("aaa",dataset)
-    ////    tableEnv.createTemporaryView[String,String]("aa",dataset,"age","job")
+    //  DataSet--> table
     val table = tableEnv.fromDataSet(dataset)
+    //  table.renameColumns('age as 'age1)  //  未生效
     tableEnv
-      .toDataSet[Row](table.select("age,job,marital").where("age > 30").orderBy("age").fetch(20))
+      .toDataSet[Row](table.select("age1,job,marital").where("age1 > 30").orderBy("age").fetch(20))
       .printToErr()
   }
 
