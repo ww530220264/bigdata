@@ -1,22 +1,24 @@
 package com.ww.data.generator;
 
+import org.apache.commons.lang.StringUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class DataGeneratorArguments extends DataGeneratoryParamParser {
 
-    private String[] args;
-
+    private ArrayList<String> extraArgs = new ArrayList<>();
     private String dbType;
 
     public DataGeneratorArguments(String[] args){
-        this.args = args;
         parse(args);
+        checkArgs();
     }
-
-    private ArrayList<String> extraArgs = new ArrayList<>();
-
-
+    public void checkArgs(){
+        if (StringUtils.isBlank(dbType)){
+            throw new RuntimeException("the dbType should be specified");
+        }
+    }
     @Override
     boolean handle(String opt, String value) {
         switch (opt) {

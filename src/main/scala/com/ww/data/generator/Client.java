@@ -1,14 +1,15 @@
 package com.ww.data.generator;
 
-import java.sql.DatabaseMetaData;
 import java.util.List;
 
 public interface Client {
 
-    public void close();
+    void close();
 
-    public void send(List<Object> data);
+    void send(List<List<Object>> data, RowMeta rowMeta);
 
-    public DatabaseMetaData getMetadata();
+    RowMeta getMetadata();
+
+    List<List<Object>> generateData(RowMeta rowMeta, int epoch);
 
 }

@@ -14,7 +14,7 @@ public abstract class DataGeneratoryParamParser {
     protected final String VERSION = "--version";
 
     final String[][] opts = {
-            {DBTYPE},
+            {DBTYPE,"--dbtype"},
             {DBURL}
     };
     final String[][] switches = {
