@@ -13,9 +13,13 @@ import java.util.concurrent.Callable;
 public class MysqlClient implements Client, Callable {
 
     private volatile static DruidDataSource dataSource;
+    private DataGeneratorArguments arguments;
     private Map<Thread, Connection> connectionMap = new HashMap();
 
-    public MysqlClient() {
+    public MysqlClient(){}
+
+    public MysqlClient(DataGeneratorArguments arguments) {
+        this.arguments = arguments;
         if (dataSource == null) {
             synchronized (this) {
                 if (dataSource == null) {
@@ -147,7 +151,7 @@ public class MysqlClient implements Client, Callable {
         try {
             DatabaseMetaData metaData = connection.getMetaData();
             String catalog = connection.getCatalog();
-            ResultSet rs = metaData.getTables(catalog, null, "stu", new String[]{"TABLE"});
+            ResultSet rs = metaData.getTables(catalog, null, arguments.getTable(), new String[]{"TABLE"});
             System.err.println("数据库名: " + catalog);
             while (rs.next()) {
                 String tableName = rs.getString("TABLE_NAME");

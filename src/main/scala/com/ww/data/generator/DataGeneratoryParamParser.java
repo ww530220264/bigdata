@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 public abstract class DataGeneratoryParamParser {
 
     protected final String DBTYPE = "--db-type";
+    protected final String TABLE = "--table";
     protected final String DBURL = "--db-url";
     protected final String HELP = "--help";
     protected final String VERBOSE = "--verbose";
@@ -15,7 +16,8 @@ public abstract class DataGeneratoryParamParser {
 
     final String[][] opts = {
             {DBTYPE,"--dbtype"},
-            {DBURL}
+            {DBURL},
+            {TABLE},
     };
     final String[][] switches = {
             {HELP, "-h"},

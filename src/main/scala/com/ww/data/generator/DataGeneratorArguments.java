@@ -9,6 +9,7 @@ public class DataGeneratorArguments extends DataGeneratoryParamParser {
 
     private ArrayList<String> extraArgs = new ArrayList<>();
     private String dbType;
+    private String table;
 
     public DataGeneratorArguments(String[] args){
         parse(args);
@@ -41,5 +42,21 @@ public class DataGeneratorArguments extends DataGeneratoryParamParser {
 
     public void setDbType(String dbType) {
         this.dbType = dbType;
+    }
+
+    public ArrayList<String> getExtraArgs() {
+        return extraArgs;
+    }
+
+    public void setExtraArgs(ArrayList<String> extraArgs) {
+        this.extraArgs = extraArgs;
+    }
+
+    public String getTable() {
+        return table;
+    }
+
+    public void setTable(String table) {
+        this.table = table;
     }
 }
