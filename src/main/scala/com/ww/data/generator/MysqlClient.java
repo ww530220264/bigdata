@@ -333,6 +333,7 @@ public class MysqlClient implements Client, Callable {
 
     @Override
     public Object call() {
+
         try {
             int i = 0;
             RowMeta metadata = getMetadata();
