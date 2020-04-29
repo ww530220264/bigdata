@@ -1,18 +1,20 @@
 package com.ww.hbase.coprocessor;
 
+import org.apache.commons.lang.time.StopWatch;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.client.coprocessor.AggregationClient;
+import org.apache.hadoop.hbase.client.coprocessor.DoubleColumnInterpreter;
+import org.apache.hadoop.hbase.client.coprocessor.LongColumnInterpreter;
 import org.apache.hadoop.hbase.coprocessor.BaseRegionObserver;
 import org.apache.hadoop.hbase.coprocessor.ObserverContext;
 import org.apache.hadoop.hbase.coprocessor.RegionCoprocessorEnvironment;
 import org.apache.hadoop.hbase.regionserver.wal.WALEdit;
+import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 /**
  * @author wangwei@huixiangtech.cn
@@ -30,7 +32,6 @@ public class MyCoprocessor_1 extends BaseRegionObserver {
         conf.set("hbase.zookeeper.quorum", "centos7-1:2181,centos7-2:2181,centos7-3:2181");
         try {
             conn = ConnectionFactory.createConnection(conf);
-            table = conn.getTable(TableName.valueOf("stu_tmp"));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -42,29 +43,80 @@ public class MyCoprocessor_1 extends BaseRegionObserver {
                        WALEdit edit,
                        Durability durability) throws IOException {
         //获取当前表名
-        //String currentTableName = e.getEnvironment().getRegionInfo().getRegionNameAsString();
+        String currentTableName = e.getEnvironment().getRegionInfo().getRegionNameAsString();
+        table = conn.getTable(TableName.valueOf(currentTableName));
         byte[] row = put.getRow();
         List<Cell> cells = put.get("info".getBytes(), "name".getBytes());
         Cell cell = cells.get(0);
-
         Put new_put = new Put(row);
-        new_put.addColumn("info".getBytes(),"name_copy".getBytes(),new String(cell.getValueArray(),cell.getValueOffset(),cell.getValueLength(),"UTF-8").getBytes());
+        byte[] destArr = new byte[cell.getValueLength()];
+        System.arraycopy(cell.getValueArray(), cell.getValueOffset(), destArr, 0, cell.getValueLength());
+        new_put.addColumn("info".getBytes(), "name_copy".getBytes(), destArr);
         table.put(new_put);
         conn.close();
     }
 
-    public static void main(String[] args) throws IOException {
-        Scan scan = new Scan();
-        ResultScanner scanner = table.getScanner(scan);
-        Iterator<Result> iterator = scanner.iterator();
-        while (iterator.hasNext()){
-            Result next = iterator.next();
-            List<Cell> columnCells = next.getColumnCells("info".getBytes(), "name".getBytes());
-            Cell cell = columnCells.get(0);
-            System.err.println(new String(cell.getValueArray(),cell.getValueOffset(),cell.getValueLength(),"UTF-8"));
+    public static void main(String[] args) throws Throwable {
+//        table = conn.getTable(TableName.valueOf("stu"));
+//        Get get = new Get("1827781".getBytes());
+//        get.addColumn("baseInfo".getBytes(), "age".getBytes());
+//        Result result = table.get(get);
+//        List<Cell> cellList = result.listCells();
+//        for (Cell cell : cellList) {
+//            System.err.println(Long.parseLong(Bytes.toString(CellUtil.cloneValue(cell))));
+//        }
+//        insert();
+        countRow();
+    }
+    /**
+     * @author wangwei@huixiangtech.cn
+     * @description TODO
+     * @params []
+     * @date 2020/4/29 15:21
+     * @return void
+     * @version 1.0
+     **/
+    public static void countRow() throws Throwable {
+        Admin admin = conn.getAdmin();
+        TableName stu = TableName.valueOf("stu");
+        admin.disableTable(stu);
+        HTableDescriptor tableDescriptor = admin.getTableDescriptor(stu);
+        String classStr = "org.apache.hadoop.hbase.coprocessor.AggregateImplementation";
+        if (!tableDescriptor.hasCoprocessor(classStr)){
+            tableDescriptor.addCoprocessor(classStr);
         }
-        table.close();
-        conn.close();
-
+        admin.modifyTable(stu,tableDescriptor);
+        admin.enableTable(stu);
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        Scan scan = new Scan();
+//        Map<byte[], NavigableSet<byte[]>> familyMap = new TreeMap<>((o1, o2) -> Bytes.compareTo(o1,o2));
+//        NavigableSet<byte[]> columnSet = new TreeSet<>((o1, o2) -> Bytes.compareTo(o1,o2));
+//        columnSet.add("age".getBytes());
+//        familyMap.put("baseInfo".getBytes(),columnSet);
+//        scan.setFamilyMap(familyMap);
+        scan.addColumn("baseInfo".getBytes(),"age".getBytes());
+        AggregationClient aggregationClient = new AggregationClient(conf);
+        double l = aggregationClient.avg(stu, new DoubleColumnInterpreter(), scan);
+        System.err.println(l);
+        stopWatch.stop();
+        System.err.println(stopWatch.getTime()/1000);
+    }
+    public static void insert() throws IOException {
+        try {
+            Put put = new Put("11".getBytes());
+            put.addColumn("info".getBytes(), "name".getBytes(), "wangwei_1".getBytes());
+            List<Cell> cells = put.get("info".getBytes(), "name".getBytes());
+            Cell cell = cells.get(0);
+            byte[] row = put.getRow();
+            Put newPut = new Put(row);
+            byte[] destArr = new byte[cell.getValueLength()];
+            System.arraycopy(cell.getValueArray(), cell.getValueOffset(), destArr, 0, cell.getValueLength());
+            newPut.addColumn("info".getBytes(), "name_copy".getBytes(), destArr);
+            table.put(newPut);
+        } finally {
+            table.close();
+            conn.close();
+        }
     }
 }

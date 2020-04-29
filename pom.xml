@@ -245,6 +245,7 @@
     </profiles>
 
     <build>
+        <finalName>bigdata</finalName>
         <sourceDirectory>src/main/scala</sourceDirectory>
         <!--        <testSourceDirectory>src/test/scala</testSourceDirectory>-->
         <plugins>
@@ -261,6 +262,7 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <finalName>sumEndPoint</finalName>
                             <artifactSet>
                                 <excludes>
                                     <exclude>org.apache.flink:force-shading</exclude>
