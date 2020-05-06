@@ -62,7 +62,7 @@ object PageViewStream {
       case "popularUsersSeen" =>
         pageViews.map(view => (view.userID, 1))
           .foreachRDD((rdd, time) => rdd.join(userList).map(_._2._2).take(10)
-            .foreach(u => println(s"Saw user $u at time $time")))
+            .foreach(u => System.err.println(s"Saw user $u at time $time")))
       case _ => println(s"Invalid metric entered: $metric")
     }
 

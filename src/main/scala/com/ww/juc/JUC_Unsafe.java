@@ -57,6 +57,7 @@ public class JUC_Unsafe {
         System.err.println(value3);
     }
 
+    //  模拟synchronized 的monitorEntere、monitorExit指令
     public static void lock() {
         unsafe.monitorEnter(JUC_Unsafe.class);
         try {
@@ -65,7 +66,7 @@ public class JUC_Unsafe {
             unsafe.monitorExit(JUC_Unsafe.class);
         }
     }
-
+    //  线程park、unpark
     public static void park_unpark() throws InterruptedException {
         Thread t1 = new Thread(() -> {
             System.err.println(currentThreadName() + "--begin--" + System.currentTimeMillis());
