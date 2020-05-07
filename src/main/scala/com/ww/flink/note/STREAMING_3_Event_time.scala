@@ -21,8 +21,8 @@ object STREAMING_3_Event_time {
   val env = StreamExecutionEnvironment.getExecutionEnvironment
 
   def main(args: Array[String]): Unit = {
-    //_watermarker_bounded_outofOrdere
-    _watermarker_bounded_outofOrdere
+//    _watermarker_bounded_outofOrdere
+    _watermarker_assigned_periodic
     env.execute()
   }
 
@@ -33,31 +33,45 @@ object STREAMING_3_Event_time {
      */
     env.setParallelism(1)
     env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    val executionConfig = env.getConfig
+    //  默认200ms，不要随意更改，以免导致窗口计算延迟
+    System.err.println("自动生成watermarkers周期： " + executionConfig.getAutoWatermarkInterval)
+    //  executionConfig.setAutoWatermarkInterval(3000)
+    System.err.println("自动生成watermarkers周期： " + executionConfig.getAutoWatermarkInterval)
     /**
      * watermark > window.end-time时触发窗口计算
      */
     val ds = env.socketTextStream("centos7-1", 9999)
       .map(_.split(","))
       .map(x => (x(0), x(1).toLong, x(2).toInt))
-      .assignTimestampsAndWatermarks(
+      .assignTimestampsAndWatermarks( //  周期性分配水印
         new AssignerWithPeriodicWatermarks[(String, Long, Int)] {
           val maxOutofOrderness = 1000L
           var currenetMaxTimestamp: Long = 0L
-
           //  生成watermark
+          /**
+           * 给迟到的数据1000L的时间，eg：当event_time=2999L的数据到来后，
+           * watermarker=1999L，如果窗口大小为2000L，则开始结算第一个窗口0L--1999L窗口内的数据
+           */
           override def getCurrentWatermark: Watermark = {
-            new Watermark(currenetMaxTimestamp - maxOutofOrderness)
+            val water_marker = currenetMaxTimestamp - maxOutofOrderness
+            System.err.println("water_marker: " + water_marker)
+            new Watermark(water_marker)
           }
-
-          //  抽取event-time时间戳
+          /**
+           * 抽取event-time时间戳
+           * 根据抽取到的eventtime决定该条数据归入哪一个窗口中
+           */
           override def extractTimestamp(element: (String, Long, Int), previousElementTimestamp: Long): Long = {
             val currentTimestamp = element._2
             currenetMaxTimestamp = Math.max(currentTimestamp, currenetMaxTimestamp)
+            System.err.println("---------current_time: " + currentTimestamp)
+            System.err.println("---------current_max_time: " + currenetMaxTimestamp)
             currentTimestamp
           }
         }
       )
-    val ss = ds.keyBy(0).timeWindow(Time.seconds(5)).sum(2)
+    val ss = ds.keyBy(0).timeWindow(Time.seconds(2)).sum(2)
     ss.printToErr()
   }
 
@@ -69,8 +83,9 @@ object STREAMING_3_Event_time {
     env.setParallelism(1)
     env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
     /**
-     * 设置延迟时间 watermark = event.event-time - 延迟时间
-     * watermark > window.end-time时触发窗口计算
+     * BoundedOutOfOrdernessTimestampExtractor extends AssignerWithPeriodicWatermarks
+     * 设置延迟时间 watermark = event.event_time - 延迟时间
+     * watermark > window.end_time时触发窗口计算
      */
     val outofOrderTime = 3
     val ds = env.socketTextStream("centos7-1", 9999)

@@ -42,9 +42,9 @@ object TABLE_BATCH_1 {
     val tableEnv = BatchTableEnvironment.create(fbEnv)
     //  DataSet--> table
     val table = tableEnv.fromDataSet(dataset)
-    //  table.renameColumns('age as 'age1)  //  未生效
+    val newTable = table.renameColumns('age as 'age1)
     tableEnv
-      .toDataSet[Row](table.select("age1,job,marital").where("age1 > 30").orderBy("age").fetch(20))
+      .toDataSet[Row](newTable.select("age1,job,marital").where("age1 > 30").orderBy("age1").fetch(20))
       .printToErr()
   }
 

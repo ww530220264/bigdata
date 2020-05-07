@@ -18,7 +18,7 @@ object STREAMING_4_State {
   private val configuration = new Configuration()
   configuration.setBoolean("queryable-state.enable", true)
   //  暂时不清楚
-//  configuration.setBoolean("state.backend.local-recovery",true)
+  //  configuration.setBoolean("state.backend.local-recovery",true)
   val env = StreamExecutionEnvironment.createLocalEnvironmentWithWebUI(configuration)
 
   def main(args: Array[String]): Unit = {

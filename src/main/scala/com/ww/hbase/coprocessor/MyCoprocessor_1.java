@@ -79,6 +79,12 @@ public class MyCoprocessor_1 extends BaseRegionObserver {
     public static void countRow() throws Throwable {
         Admin admin = conn.getAdmin();
         TableName stu = TableName.valueOf("stu");
+        /**
+         * 注册协处理器
+         * 1.禁用表
+         * 2.（判断是否已经存在该协处理器）修改表描述符
+         * 3.启用表
+         **/
         admin.disableTable(stu);
         HTableDescriptor tableDescriptor = admin.getTableDescriptor(stu);
         String classStr = "org.apache.hadoop.hbase.coprocessor.AggregateImplementation";
@@ -95,6 +101,7 @@ public class MyCoprocessor_1 extends BaseRegionObserver {
 //        columnSet.add("age".getBytes());
 //        familyMap.put("baseInfo".getBytes(),columnSet);
 //        scan.setFamilyMap(familyMap);
+        // 指定扫描的列族和列
         scan.addColumn("baseInfo".getBytes(),"age".getBytes());
         AggregationClient aggregationClient = new AggregationClient(conf);
         double l = aggregationClient.avg(stu, new DoubleColumnInterpreter(), scan);

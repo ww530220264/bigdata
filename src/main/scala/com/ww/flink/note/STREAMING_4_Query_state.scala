@@ -23,7 +23,7 @@ object STREAMING_4_Query_state {
     val key: Long = 7L
     //  状态查询客户端
     var client = new QueryableStateClient("localhost", 9069)
-    //  查询对象描述
+    //  查询状态描述符
     val state_map = new MapStateDescriptor[String, Long]("state_map", classOf[String], classOf[Long])
     //  周期执行线程
     val scheduledExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
