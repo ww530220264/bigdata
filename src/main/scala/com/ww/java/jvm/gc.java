@@ -1,4 +1,4 @@
-package com.ww.jvm;
+package com.ww.java.jvm;
 
 /**
  * @author wangwei@huixiangtech.cn

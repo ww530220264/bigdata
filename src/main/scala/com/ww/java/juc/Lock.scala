@@ -1,4 +1,4 @@
-package com.ww.juc
+package com.ww.java.juc
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
