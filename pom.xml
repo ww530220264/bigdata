@@ -64,6 +64,14 @@
         </dependencies>
     </dependencyManagement>
     <dependencies>
+
+        <!-- ######################### MQTT 支持 #########################-->
+        <dependency>
+            <groupId>org.eclipse.paho</groupId>
+            <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
+            <version>1.2.0</version>
+        </dependency>
+        <!-- ######################### MQTT 支持 #########################-->
         <!-- ######################### Hbase 支持 #########################-->
         <dependency>
             <groupId>org.apache.hbase</groupId>
