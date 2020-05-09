@@ -12,7 +12,7 @@ import java.util.List;
  **/
 public class Algorithm_String {
     public static void main(String[] args) {
-        //  无重复字符的最长子串
+        //  无重复字符的最长子串ds
 //        System.err.println(getMaxLengthNoRepeat("242343432`64364"));
         //  最长公共前缀
 //        System.err.println(getMaxCommonPrefix(new String[]{"flower", "flow", "flight"}));
