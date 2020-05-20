@@ -1,8 +1,5 @@
 package com.ww.leetcode.string;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * @author wangwei@huixiangtech.cn
  * @version 1.0
@@ -12,36 +9,50 @@ import java.util.List;
  **/
 public class Algorithm_String {
     public static void main(String[] args) {
-        //  无重复字符的最长子串ds
+        //  无重复字符的最长子串
 //        System.err.println(getMaxLengthNoRepeat("242343432`64364"));
         //  最长公共前缀
 //        System.err.println(getMaxCommonPrefix(new String[]{"flower", "flow", "flight"}));
-        checkInclusion("abc", null);
+        System.err.println(checkInclusion("ab", "eidbaooo"));
     }
 
     //  给定两个字符串 s1 和 s2，写一个函数来判断 s2 是否包含 s1 的排列。
-    public static boolean checkInclusion(String s1, String s2) {
-        // abcd
-        String s = "";
-        int length = s1.length();
-        int m = length - 1;
-        s = Character.toString(s1.charAt(0));
-        while (m > 0) {
-            int n = 1;
-            String sub_s = "";
-            for (int i = 0; i < s1.length(); i++) {
-                if (i != 0) {
-                    if (s.length() < length) {
-                        s += Character.toString(s1.charAt(i));
-                    }
-                    if (s.length() == length) {
-                        System.err.println(s);
-                        sub_s = s.substring(length-1-n);
-//                        int curIndex = length -
-//                        while ()
-                    }
+    public static boolean checkInclusion(String s, String s2) {
+        boolean flag = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (s2.indexOf(c) != -1) {
+                flag = getResult(getSubStr(s, i), Character.toString(c), s2);
+                if (flag) {
+                    return flag;
                 }
             }
+        }
+        return flag;
+    }
+
+    public static String getSubStr(String s, int index) {
+        return s.substring(0, index) + s.substring(index + 1);
+    }
+
+    public static boolean getResult(String s, String result, String s2) {
+        if (s.length() == 0) {
+            return true;
+        }
+        int baseLength = result.length() + s.length();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            result += c;
+            if (s2.indexOf(result) != -1) {
+                boolean b = getResult(getSubStr(s, i), result, s2);
+                if (b) {
+                    return b;
+                }
+            }
+            if (result.length() == baseLength) {
+                System.err.println(result);
+            }
+            result = result.substring(0, result.length() - 1);
         }
         return false;
     }

@@ -61,6 +61,7 @@ object Lock {
         * gc信息[分代年龄]
         * hashcode
       * class pointer[指向T.class]（4个字节）
+   *
       * instance data[实例数据|成员数据]
       * byte for alignment(用作字节对齐,每8个字节)
    *  给对象上锁，就是修改对象的markword

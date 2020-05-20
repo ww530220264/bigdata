@@ -2,12 +2,10 @@ package com.ww.iot.mqtt;
 
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
-
 import java.text.MessageFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
-
 /**
  * @author wangwei@huixiangtech.cn
  * @version 1.0
@@ -21,7 +19,6 @@ public class MQTT_Publisher {
         String clientId = "Publisher";
         //Use the memory persistence
         MemoryPersistence persistence = new MemoryPersistence();
-
         try {
             MqttClient sampleClient = new MqttClient(broker, clientId, persistence);
             MqttConnectOptions connOpts = new MqttConnectOptions();
