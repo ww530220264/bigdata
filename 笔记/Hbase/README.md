@@ -88,7 +88,7 @@
 > + Blcok cache
 >   + 块缓存
 
-#### Split【切分】
+#### Split Region【切分】
 
 + 大多数情况下应该自动切分【建议】
 + 手动切分
@@ -186,7 +186,7 @@
       hbase(main):003:0> create 't', {NAME => 't', CONFIGURATION => {CACHE_DATA_IN_L1 => 'true'}}
       ```
 
-#### Write Ahead Log【WAL】
+#### WAL【Write Ahead Log】
 
 + Purpose 【目的】
 
@@ -194,7 +194,7 @@
 
 + 正常情况下一个RegionServer一个WAL实例
 
-+ MultiWAL【多个WAL Stream】
++ Multi WAL【多个WAL Stream】
 
   > 1.0以后支持MultiWal，这允许一个RegionServer通过在底层的HDFS上使用多个传输管道并行的写入多个WAL流，这种方式可以提高数据写入阶段的吞吐量，这种并行是按Region划分的修改数据实现的，因此当前实现对提升单个Region的吞吐量是没有帮助的
 
@@ -206,6 +206,21 @@
   >   <value>multiwal</value>
   > </property>
   > ```
+
++ **Split Log**
+
+  > 按照Region对WAL中的编辑数据条目进行分组的操作叫做Log Split
+
+  + 重命名相应的RegionServer下的WAL目录名称
+  + Spliter每次读取日志中的一个编辑数据条目写入到对应的Region的缓冲区buffer中，并且Spliter会启动一些Writer线程将buffer中的数据写入到相应Region的recovered.edits目录中的临时恢复编辑文件中
+  + WAL split完毕后，临时文件将被重命名为第一个写入到文件中的log数据的Sequeence Id
+  + 判定所有编辑条目是否被写入的条件是：如果最后写入HFile文件的编辑条目的Sequence号>=文件名中【所有的】Sequence Id的话，表明编辑文件中的所有写入已经完成
+  + 当WAL Split完成之后，每个受影响的Region被分配给一个RegionServer
+  + 当Region被打开的时候，recovered.edits目录将会被检查是否含有待恢复的日志编辑文件，如果有的话，通过读取edits数据并将回放的数据写入到对应的MemStore中来回放日志文件，当所有的edit文件被回放后，MemStore中的数据被刷写到磁盘【HFile】，最后删除相应的恢复日志文件
+
++ Distribute Log Spliting
+
++ Distribute Log Replay
 
 ### Regions
 
@@ -422,7 +437,7 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 
 + ##### 刷出条件
 
-  + **MemStore级别**：当一个MemStore的大小达到【hbase.hregion.memstore.flush.size】设置的大小是，同一个region的MemStores都将被刷出到磁盘
+  + **MemStore级别**：当一个MemStore的大小达到【hbase.hregion.memstore.flush.size】设置的大小时，同一个region的MemStores都将被刷出到磁盘
   + **Region级别**：当Region中的所有Memstore的大小达到了上限【hbase.hregion.memstore.block.multiplier * hbase.hregion.memstore.flush.size--默认2*128M=256M】，会触发MemStore刷出
   + **RegionServer级别**：当一个RegionServer上的所有的MemStore的大小总和达到【hbase.regionserver.global.memstore.upperLimit】时，按照从大到小的顺序将MemStore刷到磁盘，直到所有MemStore的大小总和降到或略低于【hbase.regionserver.global.memstore.lowerLimit】指定的大小时
   + **RegionServer HLog级别**：当一个regisonServer上的WAL日志数量达到了【hbase.regionserver.max.logs】配置的个数时，按照时间最旧的顺序将MemStore刷出到磁盘，直到WAL日志数量低于【hbase.regionserver.max.logs】配置的大小
