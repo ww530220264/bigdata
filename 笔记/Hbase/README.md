@@ -24,34 +24,21 @@
 
 ## 命名空间 NameSpace
 
-> + ### 预定义的命名空间
->
->   + hbase：存放HBase内部表
->   + default
->
-> + ### 命令
->
->   + ```
->     create_namespace 'my_ns'
->     ```
->
->   + ```
->     create 'my_ns:my_table','cf'
->     ```
->
->   + ```
->     drop_namespace 'my_ns'
->     ```
->
->   + ```
->     alter_namespace 'my_ns',{METHOD=>'set','PROPERTY_NAME'=>'PROPERTY_VALUE'}
->     ```
+### 预定义的命名空间
+
+> + hbase：存放HBase内部表
+> + default
+
+### 命令
+
+> create_namespace 'my_ns'
+> create 'my_ns:my_table','cf'
+> drop_namespace 'my_ns'
+> alter_namespace 'my_ns',{METHOD=>'set','PROPERTY_NAME'=>'PROPERTY_VALUE'}
 
 ## 模式 Schema
 
-> + ### 备注
->
->   + 当表的模式或列族的模式改变之后，会在下次Major Compaction和StoreFiles重写之后生效
+> 当表的模式或列族的模式改变之后，会在下次Major Compaction和StoreFiles重写之后生效
 
 ## 架构 architecture
 
@@ -59,7 +46,7 @@
 
 ### Filters
 
-### Master【HMaster】
+### Master
 
 + 控制RegionServer Failover
 + 控制Region Splits
@@ -69,40 +56,203 @@
   + CatalogJanitor
     + 周期性的检查和清理hbase:meta表
 
-### RegionServer【HRegionServer】
-
-> 服务和管理Regions
+### RegionServer
 
 > 运行其他后台进程
 >
-> + CompactSplitThread
->   + 检查splits切片文件并处理minor compaction
-> + MajorComparctionChecker
->   + 检查Major Compaction情况
-> + MemStoreFlusher
->   + 周期性的刷出MemStore中的数据到StoreFile
-> + LogRoller
->   + 周期性的检查WAL文件
-> + Coprocessors
->   + 协处理器
-> + Blcok cache
->   + 块缓存
+> + CompactSplitThread【检查splits切片文件并处理minor compaction】
+> + MajorComparctionChecker【检查Major Compaction情况】
+> + MemStoreFlusher【周期性的刷出MemStore中的数据到StoreFile】
+> + LogRoller【周期性的检查WAL文件】
+> + Coprocessors【协处理器】
+> + Blcok cache【块缓存】
 
-#### Split Region【切分】
+### Block Cache
+
+> 可以在RegionServer Web UI中查看相关指标
+
+> 计算集群内多少内存可以用来做缓存
+>
+> num RegionServers * headSize * hfile.block.cache.size \* 0.99
+
+> 支持压缩【默认关闭】【hbase.block.data.cachecompressed=true】
+>
+> 如果RegionServer承载的数量超过了缓存的大小，【SNAPPY】压缩之后会增加吞吐量，但是会增加延迟，增加CPU利用率，增加垃圾回收负载。
+
+#### LRUBlockCache
+
++ 区域划分
+  + Single-access priority
+    + 第一次从文件中加载的block放入该区域
+  + Multi-access priority
+    + single-access区域中的block中的数据被再次访问的时候，block将移动到该区域
+  + In-memory priority
+    + 配置列族的IN_MEMORY属性为true【HColumnDescriptor.setInMemory(true)】或者【create  't', {NAME => 'f', IN_MEMORY => 'true'}】
++ 开启需要考虑的因素
+  + Working Set Size【数据集大小】
+  + Catalog Tables【hbase:meta表强制缓存在block cache并且有in_memory优先级】
+  + HFile Indexes【数据块的多级索引也可能被缓存在LRU】
+  + Keys【因为value是和Keys-----rowKey+family qualifier+timestamp 一起存储的】
+  + Bloom Filters【像HFile一样，也可能会被缓存在LRU】
++ 不适用场景
+  + 【完全随机读模式】：此模式下缓存命中率很低，接近0，会浪费内存和CPU资源，如果读取大量的数据的话，可能频繁触发垃圾回收
+  + 【MapReduce】：把一个表作为MR作业的输入的时候，每一行数据只会使用一次，此时没有必要缓存这些数据。可以通过扫描器设置缓存选项为false，禁用当次扫描缓存。
+  + 【集群缓存大小 < 需要读取的一批数据大小】：此时缓存是不够存放整个数据的，经过一段时间，缓存被填满，继续缓存新的数据的时候就会造成频繁的写入新读取的数据，移除最少使用的缓存数据
+
+#### BucketCache
+
+> 【OFF-HEAP|ON-HEAP|FILE】【如果启用该选项时，相当于启用了两层的缓存系统】
+
+##### 配置
+
++ ```
+  <property>
+    <name>hbase.bucketcache.ioengine</name>
+    <value>offheap</value>
+    <description>配置bucketcache为直接内存模式</description>
+  </property>
+  <property>
+    <name>hfile.block.cache.size</name>
+    <value>0.2</value>
+    <description>配置LRUCache内存大小占堆内存大小的比例</description>
+  </property>
+  <property>
+    <name>hbase.bucketcache.size</name>
+    <value>4196</value>
+    <description>bucketcache大小</description>
+  </property>
+  ```
+
+#### Combine Block Cache
+
++ L1【LRUBlockCache】
+
+  + 保存Meta Block，Index 和 BLOOM Blocks
+
++ L2【BucketCache】
+
+  + 保存DataBlock缓存
+
++ 1.0之后可以设置column family的元数据和数据块存放在L1中
+
+  + ```
+    HColumnDescriptor.setCacheDataInL1(true)
+    hbase(main):003:0> create 't', {NAME => 't', CONFIGURATION => {CACHE_DATA_IN_L1 => 'true'}}
+    ```
+
+### WAL
+
+#### Purpose 【目的】
+
+> 记录HBase中所有的变化【PUT&DELETE】，是基于文件的存储，在正常情况下是没有必要的，但是当RegionServer在【已经写到HLog但】MemStore的数据刷写到磁盘之前时崩溃或者变得不可用的时候，WAL可以确保可以回放数据的改变。当然，如果数据写入WAL的时候失败了，那么整个操作就失败了
+
+> 正常情况下一个RegionServer一个WAL实例
+
+#### Multi WAL
+
+> 1.0以后支持MultiWal，这允许一个RegionServer通过在底层的HDFS上使用多个传输管道并行的写入多个WAL流，这种方式可以提高数据写入阶段的吞吐量，这种并行是按Region划分的修改数据实现的，因此当前实现对提升单个Region的吞吐量是没有帮助的
+
+> RegionServers使用原始的WAL或者MultiWAL都能处理任意一组WAL的恢复，因此可以使用滚动重启实现零停机配置更新
+
+> ```
+> <property>
+>   <name>hbase.wal.provider</name>
+>   <value>multiwal</value>
+> </property>
+> ```
+
+#### Split Log
+
+> 按照Region对WAL中的编辑数据条目进行分组的操作叫做Log Split
+
+> 支持Distribute Log Spliting
+
+> 支持Distribute Log Replay
+
+##### 步骤
+
++ 重命名相应的RegionServer下的WAL目录名称
++ Spliter每次读取日志中的一个编辑数据条目写入到对应的Region的缓冲区buffer中，并且Spliter会启动一些Writer线程将buffer中的数据写入到相应Region的recovered.edits目录中的临时恢复编辑文件中
++ WAL split完毕后，临时文件将被重命名为第一个写入到文件中的log数据的Sequeence Id
++ 判定所有编辑条目是否被写入的条件是：如果最后写入HFile文件的编辑条目的Sequence号>=文件名中【所有的】Sequence Id的话，表明编辑文件中的所有写入已经完成
++ 当WAL Split完成之后，每个受影响的Region被分配给一个RegionServer
++ 当Region被打开的时候，recovered.edits目录将会被检查是否含有待恢复的日志编辑文件，如果有的话，通过读取edits数据并将回放的数据写入到对应的MemStore中来回放日志文件，当所有的edit文件被回放后，MemStore中的数据被刷写到磁盘【HFile】，最后删除相应的恢复日志文件
+
+### Regions
+
+> Region也可以配置复制因子以实现HA Reads
+
+#### 考虑因素
+
+##### 数量
+
+> HBase设计为在每个RegionServer上运行20-200个5G--20G大小的Region
+
++ 每个MemStore【也就是Column Family】需要2M的大小，1000个Region而且每个Region有两个Column Family的话就需要4G的堆内存，在还没有存储数据的情况下都需要预分配这么多内存
++ 如果数据以相同数速率写入所有的Regions，全局内存的使用将会在Region过多而导致compaction时进行很小的刷出操作。要避免重写相同的数据很多次。当全局的Memstore的使用达到一个上限阈值，将会刷出包含最大MemStore数据量的Region，当刷出相应的MemStore使全局MemStore使用内存大小降到另一个下限阈值之下后，数据继续被写入，然后很快又会超过上限阈值，然后再刷出相应的Region的MemStore，如此反复。这就是限制Region数量的主要原因
++ Master讨厌大量的Region，因为他需要花很多的实际分配和移动Regions。这也造成了对ZK的负载很大
++ 在老的版本中，在很少的RegionServer中存放大量的Region时会增加存储文件的索引，并增加了堆内存的使用，对RegionServer的内存压力很大，还有可能造成OOM
++ 如果基于HBase运行MR job的话，一般一个Region一个map task，如果太少的Region不足以获得足够的task，如果大量的Region则会产生大量的task
+
+#### 分配
+
+##### 步骤
+
++ Master启动时调用AssignmentManager
++ AssgnmentManager查看在hbase:meta表中查看是否存在Region分配信息
++ 如果Region分配信息仍然有效【也就是说RS仍然在线】，那么Region分配信息保存不变
++ 如果Region分配信息是无效的话，LoadBalancerFactory将被调用来分配Region。loadBalancer将分配Region到一个新的RS
++ 使用RS分配信息和RS打开Region时的启动代码更新hbase:meta
+
+##### RS失效
+
++ RS失效之后，该RS上的Regions立刻变得不可用
++ Master将会检测到RS已经失败
++ 然后hbase:meta表中的相应的Region分配信息将会视为无效，然后将相应的Region重新分配
++ 此时对应Region上的查询将会重试，不会丢失
++ 后续操作将会在时间范围【ZK session timeout + split time + assignment/replay time】内切换到新的RS上
+
+#### 移动
+
+> 可以被LoadBalancer周期性检查判断是否需要移动
+
+#### 本地性
+
+> HBase通过MemStore刷出或compaction事项Region数据的本地性
+
+> 当一个RS失败的时候，另一个RS可能会被分配到一个没有本地StoreFile的Region，当新数据写到这个region或者表被compact且StoreFile被重写的时候，这些Region将会与RS建立本地性
+
+#### Split
 
 + 大多数情况下应该自动切分【建议】
+
 + 手动切分
+
   + 需要了解key的分布情况
   + 可以减轻Region创建和移动负载不足的情况
   + 可以更容易执行基于时间交错的【错峰】的major compaction分散集群网络IO负载
+
 + 相关参数
+
   + hbase.regionserver.region.split.policy
   + hbase.hregion.max.filesize
   + hbase.regionserver.regionSplitLimit
   + hbase.hregion.max.filesize = 100G【用来禁用自动切分，不建议设置成LONG.MAX_VALUE】
+
++ ##### 切分策略
+
+  + ![image-20200521101600197](.\image\Region_自定义切分策略配置.png)
+
++ ##### 切分点
+
+  + 字母数字行键
+  + 使用自定义算法
+    + 使用RegionSplitter tool
+
 + **切分步骤**
+
   + prepare【准备阶段】【启动切分事务】【SPLIT TRANSACTION IS STARTED】
-    + 【1】获取表的共享读锁，因防止在切分过程中表模式被修改
+    + 【1】获取表的共享读锁，防止在切分过程中表模式被修改
     + 【2】在zookeeper的/hbase/region-in-transition/parent-region-name节点并设置状态state为SPLITING
   + 通知Master
     + Master在/hbase/region-in-transition注册有Watcher
@@ -118,215 +268,226 @@
   + RegionServer更新zookeeper结点/hbase/region-in-transition/parent-region-name的状态为SPLIT，因此Master可以接收到通知。如果必要的话，balancer可以将daughter region重新分配到其他的RegionServers。【此时SPLIT TRANSACTION结束】
   + split之后,.META.表和HDFS仍然包含parent Region的引用信息。当子Region压缩重写的时候，这些引用文件将被移除。垃圾回收任务运行时会周期性的检查是否有daughter regions仍然引用parent Region的文件，如果不包含，那么parent Region将会被删除
 
-#### Block Cache
+#### Merge
 
-+ 可以在RegionServer Web UI中查看相关指标
+> Master和RS都会参与到合并操作中
 
-+ 计算集群内多少内存可以用来做缓存
-  + num RegionServers * headSize * hfile.block.cache.size \* 0.99
-+ 支持压缩【默认关闭】【hbase.block.data.cachecompressed=true】。如果RegionServer承载的数量超过了缓存的大小，【SNAPPY】压缩之后会增加吞吐量，但是会增加延迟，增加CPU利用率，增加垃圾回收负载。
+##### 步骤
 
-+ LRUBlockCache
++ 客户端发送merge RPC请求到Master
++ Master将这些Region一起移动到对Region负载更重的RS上，然后Master给RS发送合并请求
++ RS将合并操作作为一个本地事务运行
+  + 将待合并的Regions状态设置为OFFLINE，然后再文件系统中合并相应的Regions
+  + 从hbase:meta表中原子性的删除被合并的Region数据然后添加新的合并Region信息到hbase:meta表中
+  + RS打开新的Region并向Master报告合并结果
 
-  + 区域划分
-    + Single-access priority
-      + 第一次从文件中加载的block放入该区域
-    + Multi-access priority
-      + single-access区域中的block中的数据被再次访问的时候，block将移动到该区域
-    + In-memory priority
-      + 配置列族的IN_MEMORY属性为true【HColumnDescriptor.setInMemory(true)】或者【create  't', {NAME => 'f', IN_MEMORY => 'true'}】
-  + 开启需要考虑的因素
-    + Working Set Size【数据集大小】
-    + Catalog Tables【hbase:meta表强制缓存在block cache并且有in_memory优先级】
-    + HFile Indexes【数据块的多级索引也可能被缓存在LRU】
-    + Keys【因为value是和Keys-----rowKey+family qualifier+timestamp 一起存储的】
-    + Bloom Filters【像HFile一样，也可能会被缓存在LRU】
-  + 不适用场景
-    + 【完全随机读模式】：此模式下缓存命中率很低，接近0，会浪费内存和CPU资源，如果读取大量的数据的话，可能频繁触发垃圾回收
-    + 【MapReduce】：把一个表作为MR作业的输入的时候，每一行数据只会使用一次，此时没有必要缓存这些数据。可以通过扫描器设置缓存选项为false，禁用当次扫描缓存。
-    + 【集群缓存大小 < 需要读取的一批数据大小】：此时缓存是不够存放整个数据的，经过一段时间，缓存被填满，继续缓存新的数据的时候就会造成频繁的写入新读取的数据，移除最少使用的缓存数据
+##### 示例
 
-+ BucketCache【OFF-HEAP|ON-HEAP|FILE】
+> ```
+> $ hbase> merge_region 'ENCODED_REGIONNAME', 'ENCODED_REGIONNAME'
+> $ hbase> merge_region 'ENCODED_REGIONNAME', 'ENCODED_REGIONNAME', true
+> 【true】代表强制合并，通常只会合并相邻的区域
+> ```
 
-  + 【如果启用该选项时，相当于启用了两层的缓存系统】
+### Store
 
-    ```
-    <property>
-      <name>hbase.bucketcache.ioengine</name>
-      <value>offheap</value>
-      <description>配置bucketcache为直接内存模式</description>
-    </property>
-    <property>
-      <name>hfile.block.cache.size</name>
-      <value>0.2</value>
-      <description>配置LRUCache内存大小占堆内存大小的比例</description>
-    </property>
-    <property>
-      <name>hbase.bucketcache.size</name>
-      <value>4196</value>
-      <description>bucketcache大小</description>
-    </property>
-    ```
+> 一个Store由一个MemStore和0到多个StoreFile组成
 
-+ Combine Block Cache【策略】
+### MemStore
 
-  + L1【LRUBlockCache】
+> 当触发一个MemStore的刷出请求的时候，对当前MemStore备份一个快照，并使用一个新的MemStore继续提供服务。当后台刷写器反馈刷出成功之后，这个快照将会被丢弃。
+>
+> 需要注意的是，**当一个MemStore刷出的时候，属于相同Region的所有MemStores都将被刷出**
 
-    + 保存Meta Block，Index 和 BLOOM Blocks
+#### 刷出条件
 
-  + L2【BucketCache】
++ **MemStore级别**：当一个MemStore的大小达到【hbase.hregion.memstore.flush.size】设置的大小时，同一个region的MemStores都将被刷出到磁盘
++ **Region级别**：当Region中的所有Memstore的大小达到了上限【hbase.hregion.memstore.block.multiplier * hbase.hregion.memstore.flush.size--默认2*128M=256M】，会触发MemStore刷出
++ **RegionServer级别**：当一个RegionServer上的所有的MemStore的大小总和达到【hbase.regionserver.global.memstore.upperLimit】时，按照从大到小的顺序将MemStore刷到磁盘，直到所有MemStore的大小总和降到或略低于【hbase.regionserver.global.memstore.lowerLimit】指定的大小时
++ **RegionServer HLog级别**：当一个regisonServer上的WAL日志数量达到了【hbase.regionserver.max.logs】配置的个数时，按照时间最旧的顺序将MemStore刷出到磁盘，直到WAL日志数量低于【hbase.regionserver.max.logs】配置的大小
 
-    + 保存DataBlock缓存
+#### 手动刷出
 
-  + 1.0之后可以设置column family的元数据和数据块存放在L1中
+```
+flush 'table_name'
+flush 'region_name'
+```
 
-    + ```
-      HColumnDescriptor.setCacheDataInL1(true)
-      或
-      hbase(main):003:0> create 't', {NAME => 't', CONFIGURATION => {CACHE_DATA_IN_L1 => 'true'}}
-      ```
+### StoreFile
 
-#### WAL【Write Ahead Log】
++ HFile
++ HFile Tool
+  + org.apache.hadoop.hbase.io.hfile.HFile
+  + hbase org.apache.hadoop.hbase.io.hfile.HFile -v -f  /path-to-hfile
++ 逻辑结构
+  + ![image-20200519095215534](.\image\HFile逻辑结构.png)
 
-+ Purpose 【目的】
+  + Trailer
+    + 这部分主要记录了HFile的基本信息、各个部分的偏移量和寻址信息
+  + Load-on-open-section
+    + 表示在HBase regionServer启动的时候，需要加载到内存中的数据块，包括FileInfo、Bloom Filter Block、Data Block index和Meta block index
+  + scanned block section
+    + 表示在HFile顺序扫描时数据块会被读取，主要包括Leaf Index Block和Bloom Block
+  + non scanned block section
+    + 表示在HFile顺序扫描的时候数据不会被读取，主要包括Meta Block和Intermediate Leval Data Index Block
 
-  > 记录HBase中所有的变化【PUT&DELETE】，是基于文件的存储，在正常情况下是没有必要的，但是当RegionServer在【已经写到HLog但】MemStore的数据刷写到磁盘之前时崩溃或者变得不可用的时候，WAL可以确保可以回放数据的改变。当然，如果数据写入WAL的时候失败了，那么整个操作就失败了
++ 物理结构
+  + ![image-20200519095318847](.\image\HFile物理结构_2.png)
 
-+ 正常情况下一个RegionServer一个WAL实例
++ 存储数据结构
+  + B+
+  + B-
+  + LSM
 
-+ Multi WAL【多个WAL Stream】
+### Blocks
 
-  > 1.0以后支持MultiWal，这允许一个RegionServer通过在底层的HDFS上使用多个传输管道并行的写入多个WAL流，这种方式可以提高数据写入阶段的吞吐量，这种并行是按Region划分的修改数据实现的，因此当前实现对提升单个Region的吞吐量是没有帮助的
+> StoreFiles由blocks组成，blocksize可以在ColumnFamily中配置
+>
+> 可压缩
 
-  > RegionServers使用原始的WAL或者MultiWAL都能处理任意一组WAL的恢复，因此可以使用滚动重启实现零停机配置更新
+### KeyValue
 
-  > ```
-  > <property>
-  >   <name>hbase.wal.provider</name>
-  >   <value>multiwal</value>
-  > </property>
-  > ```
+> KeyValue是HBase中数据存储的核心
+>
+> KeyValue不会跨Block拆分，即使KeyValue大小大于BlockSize
 
-+ **Split Log**
+#### 格式
 
-  > 按照Region对WAL中的编辑数据条目进行分组的操作叫做Log Split
++ keylength
++ valuelength
++ key
++ value
 
-  + 重命名相应的RegionServer下的WAL目录名称
-  + Spliter每次读取日志中的一个编辑数据条目写入到对应的Region的缓冲区buffer中，并且Spliter会启动一些Writer线程将buffer中的数据写入到相应Region的recovered.edits目录中的临时恢复编辑文件中
-  + WAL split完毕后，临时文件将被重命名为第一个写入到文件中的log数据的Sequeence Id
-  + 判定所有编辑条目是否被写入的条件是：如果最后写入HFile文件的编辑条目的Sequence号>=文件名中【所有的】Sequence Id的话，表明编辑文件中的所有写入已经完成
-  + 当WAL Split完成之后，每个受影响的Region被分配给一个RegionServer
-  + 当Region被打开的时候，recovered.edits目录将会被检查是否含有待恢复的日志编辑文件，如果有的话，通过读取edits数据并将回放的数据写入到对应的MemStore中来回放日志文件，当所有的edit文件被回放后，MemStore中的数据被刷写到磁盘【HFile】，最后删除相应的恢复日志文件
+#### Key
 
-+ Distribute Log Spliting
++ rowLength
++ row
++ columnfamilylength
++ columnfamily
++ columnqualifier
++ timestamp
++ keytype【Put、Delete、DeleteColumn、DeleteFamily】
 
-+ Distribute Log Replay
+## Compaction
 
-### Regions
+> Compaction操作可以通过合并StoreFiles减少文件的数量来提升Read操作的性能
+>
+> Compaction是资源密集型操作
+>
+> Compaction不会造成Region Merge
 
-### Bulk Loading
+### Minor Compaction
 
-### HDFS
+> 选择少量的相邻的StoreFiles并把他们重写为一个单独的StoreFile
+>
+> 由于一些潜在的副作用，该操作不会丢掉Delete和过期版本的数据
+>
+> 该操作的结果是产生更少的更大的StoreFile
 
-### Timeline-consistent High
+### Major Compaction
 
-## 服务端
+> 该操作的结果是每个Store【ColumnFamily】产生一个单独的StoreFile
+>
+> 该操作会出来删除标记的数据和最大版本数据
 
-+ ### write
-  + 先将数据记录在提交日志（commit log）中【预写日志WAL】
-  + 然后将数据写入内存的memstore中
-  + 一旦memstore中保存的写入数据的累计大小超过了一定的阈值，系统会将这些数据移除内存作为HFile文件刷写到磁盘中。
-  + 数据移出内存之后，系统会丢弃对应的提交日志，只保留未持久化到磁盘中的提交日志。
-  + 在将数据移出memstore写入磁盘的过程中，可以非阻塞读写，通过滚动内存中的memstore也就是用新的空memstore获取更新数据，将旧的满的memstore转换成一个文件。
-  + memstore中的数据以及按照rowkey排序，持久化到磁盘中的HFile时也是按照这个顺序排列的，所以不必执行排序或其他特殊处理
+> 默认每7天执行一次
+>
+> 在高负载集群中，Major Compaction执行可能需要很多资源，可能会影响服务性能，因此可以手动在业务低峰期执行
 
-+ ### read
+### Compaction Policy
 
-+ #### update
++ ExploringCoompactionPolicy
+  + 尝试选择能做最少的工作来进行Compaction的一组文件【StoreFiles】
++ RatioBasedCompactionPolicy
+  + 选择第一组满足标准条件的文件【StoreFiles】即可
 
-+ ### delete 【墓碑标记】
+## Bulk Loading
+
+## HDFS
+
+## Timeline-consistent High
 
 ## 客户端
 
-+ ### 读
+### 读
 
-  + #### 【Gets】批量读取
++ #### 【Gets】批量读取
 
-    + 如果批量读取中有一个错误将会导致整个get()操作终止
-    + 对于批量操作中的局部错误，有一种 更为精细的处理方法，batch方法
+  + 如果批量读取中有一个错误将会导致整个get()操作终止
+  + 对于批量操作中的局部错误，有一种 更为精细的处理方法，batch方法
 
-  + #### 【getRowOrBefore】
++ #### 【getRowOrBefore】
 
-    + 查找一个特定的行或这个请求行之前的一行
-    + 需指定一个存在的列族。否则服务器端会抛出NullPointerException
+  + 查找一个特定的行或这个请求行之前的一行
+  + 需指定一个存在的列族。否则服务器端会抛出NullPointerException
 
-+ ### 写
+### 写
 
-  + #### 缓冲区 【默认禁用】
++ #### 缓冲区 【默认禁用】
 
-    + setAutoFlush(false) //将自动刷写设置为false来激活写缓冲区
-    + setWriteBufferSize(long writeBufferSize) //设置写缓冲区大小【默认2M】
-    + 刷写
-      + flushCommits() //【显示】强制将数据写到服务端【通常是不必要的】
-      + put()或setWriteBufferSize()方法时自动触发，会将目前占用缓冲区的大小与用户配置的大小作比较。如果超出限制则会调用flushCommits()方法。如果缓冲区被禁用，可以设置setAutoFlush(true)，这样每次调用put方法时都会触发刷写。
-      + 调用Htable类的close方法也会无条件的隐式触发刷写
-    + 注意事项
-      + 如果缓冲区的记录涉及到多行或多个regionServer，在与服务器通信时，会将缓冲区中的记录按regionServer分组，然后分别将各组数据传输到对应的regionServer服务器上
-      + 在调用Htable.put操作时，客户端会先把所有的 put操作插入到写缓冲区中，然后隐式的调用flushCache，在插入每个put实例的时候，客户端会检查Put实例，如果检查失败(比如Put实例为空)，将抛出异常，二前面检查通过的则会被添加到缓冲区
-      + 在客户端检查通过后，服务器端处理put操作，在服务器端执行失败的put实例将继续保存在客户端本地写缓冲区中，可调用HTable的getWriterBuffer方法进行访问。客户端通过异常报告远程错误，可查询操作失败、出错的原因以及重试的次数。对于错误列族，服务器端重试次数自动设置为1，因为这是不可恢复的错误
-      + 无法控制服务器端执行put的顺序
-    + 全局配置
-      + habse-site.xml
-        + hbase.client.write.buffer=10240000
+  + setAutoFlush(false) //将自动刷写设置为false来激活写缓冲区
+  + setWriteBufferSize(long writeBufferSize) //设置写缓冲区大小【默认2M】
+  + 刷写
+    + flushCommits() //【显示】强制将数据写到服务端【通常是不必要的】
+    + put()或setWriteBufferSize()方法时自动触发，会将目前占用缓冲区的大小与用户配置的大小作比较。如果超出限制则会调用flushCommits()方法。如果缓冲区被禁用，可以设置setAutoFlush(true)，这样每次调用put方法时都会触发刷写。
+    + 调用Htable类的close方法也会无条件的隐式触发刷写
+  + 注意事项
+    + 如果缓冲区的记录涉及到多行或多个regionServer，在与服务器通信时，会将缓冲区中的记录按regionServer分组，然后分别将各组数据传输到对应的regionServer服务器上
+    + 在调用Htable.put操作时，客户端会先把所有的 put操作插入到写缓冲区中，然后隐式的调用flushCache，在插入每个put实例的时候，客户端会检查Put实例，如果检查失败(比如Put实例为空)，将抛出异常，二前面检查通过的则会被添加到缓冲区
+    + 在客户端检查通过后，服务器端处理put操作，在服务器端执行失败的put实例将继续保存在客户端本地写缓冲区中，可调用HTable的getWriterBuffer方法进行访问。客户端通过异常报告远程错误，可查询操作失败、出错的原因以及重试的次数。对于错误列族，服务器端重试次数自动设置为1，因为这是不可恢复的错误
+    + 无法控制服务器端执行put的顺序
+  + 全局配置
+    + habse-site.xml
+      + hbase.client.write.buffer=10240000
 
-  + #### compare-and-set 原子性操作
++ #### compare-and-set 原子性操作
 
-    + checkAndPut
-      + ![image-20200517162431469](.\image\checkAndPut.png)
-    + 注意事项
-      + 该操作只能检查和修改【同一行】，与其他许多操作一样，这个操作只提供【同一行】数据的原子性保证。检查和修改分别针对不同行数据时会抛出异常
+  + checkAndPut
+    + ![image-20200517162431469](.\image\checkAndPut.png)
+  + 注意事项
+    + 该操作只能检查和修改【同一行】，与其他许多操作一样，这个操作只提供【同一行】数据的原子性保证。检查和修改分别针对不同行数据时会抛出异常
 
-+ ### 删
+### 删
 
-  + #### api
++ #### api
 
-    + ![image-20200517171914085](.\image\api_delete.png)
+  + ![image-20200517171914085](.\image\api_delete.png)
 
-  + #### 【compare-and-delete】
++ #### 【compare-and-delete】
 
-    + ![image-20200517172627893](.\image\compareAndDelete.png)
-    + 只能对同一行数据进行检查和删除
+  + ![image-20200517172627893](.\image\compareAndDelete.png)
+  + 只能对同一行数据进行检查和删除
 
-+ ### batch
+### batch
 
-  + #### 批量操作
++ #### 批量操作
 
-    + 使用batch功能时，put实例不会放入到客户端写入缓冲区中，batch请求是同步的，会把操作直接发送到服务器端，这个过程没有延迟或其他操作
+  + 使用batch功能时，put实例不会放入到客户端写入缓冲区中，batch请求是同步的，会把操作直接发送到服务器端，这个过程没有延迟或其他操作
 
-  + #### 可能的返回结果
++ #### 可能的返回结果
 
-    + ![image-20200517173419256](.\image\batch_result.png)
+  + ![image-20200517173419256](.\image\batch_result.png)
 
-+ ### scan 扫描 
+### scan 扫描 
 
-  + 扫描操作不会通过一次RPC请求返回所有匹配的行，而是以行为单位进行返回
-  + 扫描器租约时长配置hbase-site.xml【hbase.regionservers.lease.period】
-  + **缓存 【一次RPC请求可以获取多行数据】【面向行】**
-    + **可以为少量的RPC请求次数和客户端以及服务端的内存消耗找到平衡点**
-    + 可以在表的层面启用，会对这个表的所有扫描实例的缓存都会生效【HTable】
-      + ![image-20200517194652208](.\image\scanner_cache.png)
-    + 也可以在扫描层面启用，只会影响当前的扫描实例【scanner】
-      + ![image-20200517195045369](.\image\scanner_cache_scanner.png)
-    + 全局配置
-      + ![image-20200517195121751](.\image\scanner_cache_global.png)
++ 扫描操作不会通过一次RPC请求返回所有匹配的行，而是以行为单位进行返回
++ 扫描器租约时长配置hbase-site.xml【hbase.regionservers.lease.period】
++ **缓存 【一次RPC请求可以获取多行数据】【面向行】**
+  + **可以为少量的RPC请求次数和客户端以及服务端的内存消耗找到平衡点**
+  + 可以在表的层面启用，会对这个表的所有扫描实例的缓存都会生效【HTable】
+    + ![image-20200517194652208](.\image\scanner_cache.png)
+  + 也可以在扫描层面启用，只会影响当前的扫描实例【scanner】
+    + ![image-20200517195045369](.\image\scanner_cache_scanner.png)
+  + 全局配置
+    + ![image-20200517195121751](.\image\scanner_cache_global.png)
 
-  + **批量处理【面向列】**
-    + 可以让用户选择每一次scanner.next操作要取回多少列，如果一行中的列数超过了批量设置中设置的值，则可以将这一行分片，每次next返回一片
-    + 如果一行的列数不能被批量设置中的值整除时，最后一次返回的result实例中会包含比较少的列
-    + ![image-20200517195726232](.\image\scanner_batch.png)
-  + **组合使用缓存和批量处理，可以让用户方便的控制扫描一个范围内的行键时所需要的的RPC调用次数**
-    + ![image-20200517200234233](.\image\scanner_cache_and_batch.png)
-  + **调用close方法释放所有由扫描器控制的资源**
++ **批量处理【面向列】**
+  + 可以让用户选择每一次scanner.next操作要取回多少列，如果一行中的列数超过了批量设置中设置的值，则可以将这一行分片，每次next返回一片
+  + 如果一行的列数不能被批量设置中的值整除时，最后一次返回的result实例中会包含比较少的列
+  + ![image-20200517195726232](.\image\scanner_batch.png)
++ **组合使用缓存和批量处理，可以让用户方便的控制扫描一个范围内的行键时所需要的的RPC调用次数**
+  + ![image-20200517200234233](.\image\scanner_cache_and_batch.png)
++ **调用close方法释放所有由扫描器控制的资源**
 
 ## 过滤器
 
@@ -405,8 +566,6 @@
     + hbase.regionserver.lease.period【120000】
   + 读取数据时是不需要加锁的，因为服务器端应用了一个多版本的并发控制机制来保证行级读操作
 
-
-
 ## count
 
 ```
@@ -423,57 +582,12 @@ alter 'stu_tmp', METHOD => 'table_att', 'coprocessor' => \
 alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 ```
 
-## MemStore
-
-### 概念
-
-+ 数据写入时，先写入HLog,然后再写入MemStore，用于写缓存
-
-### 刷出
-
-+ ##### 概念
-
-  + 当系统满足一些条件时，会触发memStore的输出操作。**刷出的最小单位是region，当输出操作被触发时，所有属于同一个region的memStore都将被刷出**
-
-+ ##### 刷出条件
-
-  + **MemStore级别**：当一个MemStore的大小达到【hbase.hregion.memstore.flush.size】设置的大小时，同一个region的MemStores都将被刷出到磁盘
-  + **Region级别**：当Region中的所有Memstore的大小达到了上限【hbase.hregion.memstore.block.multiplier * hbase.hregion.memstore.flush.size--默认2*128M=256M】，会触发MemStore刷出
-  + **RegionServer级别**：当一个RegionServer上的所有的MemStore的大小总和达到【hbase.regionserver.global.memstore.upperLimit】时，按照从大到小的顺序将MemStore刷到磁盘，直到所有MemStore的大小总和降到或略低于【hbase.regionserver.global.memstore.lowerLimit】指定的大小时
-  + **RegionServer HLog级别**：当一个regisonServer上的WAL日志数量达到了【hbase.regionserver.max.logs】配置的个数时，按照时间最旧的顺序将MemStore刷出到磁盘，直到WAL日志数量低于【hbase.regionserver.max.logs】配置的大小
-  + **手动刷出，通过shell命令【flush 'table_name'】 或 【flush 'region_name'】**
-
-## HFile
-
-### 逻辑结构
-
-+ ![image-20200519095215534](.\image\HFile逻辑结构.png)
-
-+ Trailer
-  + 这部分主要记录了HFile的基本信息、各个部分的偏移量和寻址信息
-+ Load-on-open-section
-  + 表示在HBase regionServer启动的时候，需要加载到内存中的数据块，包括FileInfo、Bloom Filter Block、Data Block index和Meta block index
-+ scanned block section
-  + 表示在HFile顺序扫描时数据块会被读取，主要包括Leaf Index Block和Bloom Block
-+ non scanned block section
-  + 表示在HFile顺序扫描的时候数据不会被读取，主要包括Meta Block和Intermediate Leval Data Index Block
-
-### 物理结构
-
-+ ![image-20200519095318847](.\image\HFile物理结构_2.png)
-
-## 数据存储结构
-
-+ B+
-+ B-
-+ LSM
-
 ## why
 
-> **为什么不将每个region的数据更改都写到一个单独的日志文件中？**
->
+**为什么不将每个region的数据更改都写到一个单独的日志文件中？**
+
 > + 如果将不同表的日志提交到不同的日志文件中去的话，就需要向FS并发的写入大量文件，这种操作依赖于每个FS底层的实现，这些写入会导致大量的磁盘寻道来向不同的物理日志文件中写入数据
-> + HBase遵循这个原则，同时写入太多的文件，且需要保留滚动的日志会影响系统的扩展性，这种设计最终是由底层文件系统决定的。虽然在HBase中可以替换底层文件系统，但是通常情况下安装还是会选择HDFS
+>+ HBase遵循这个原则，同时写入太多的文件，且需要保留滚动的日志会影响系统的扩展性，这种设计最终是由底层文件系统决定的。虽然在HBase中可以替换底层文件系统，但是通常情况下安装还是会选择HDFS
 > + 如果系统崩溃，那么HMaster会将日志拆分，将不同region的Log数据进行拆分，分别放到对应的region目录下，然后再将失效的region重新分配，领取到这些region的regionServer在load region的过程中，会发现有历史HLog需要处理，因此会replay HLog中的数据到memstore中，然后flush到StoreFile【也就是HFile】中，完成数据恢复
 
 > **HBase数据时如何写入的？**
@@ -491,10 +605,10 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 > + **结束写事务**：此时该线程的更新操作才会对其他读请求可见，更新才实际生效。
 > + **flush memstore**：当写缓存满64M后，会启动flush线程将数据刷新到磁盘
 
-> **WAL机制**
->
-> + WAL是一种高效的日志算法，几乎是所有非内存数据库提升写性能的不二法门，基本原理是在数据写入之前首先顺序写入日志，然后再写入缓存，等到缓存写满后在同一落盘。之所以能够提升写性能，是因为WAL将一次随机写转化为了一次顺序写+一次内存写，提升写性能的同事，WAL可以保证数据的可靠性，即在任何情况下数据不丢失。加入一次写入之后发生了宕机，即使所有缓存中的数据丢失，也可以通过恢复日志还原出丢失的数据
-> + 持久化等级
+**WAL机制**
+
+> + WAL是一种高效的日志算法，几乎是所有非内存数据库提升写性能的不二法门，基本原理是在数据写入之前首先顺序写入日志，然后再写入缓存，等到缓存写满后在同一落盘。之所以能够提升写性能，是因为WAL将一次随机写转化为了一次顺序写+一次内存写，提升写性能的同事，WAL可以保证数据的可靠性，即在任何情况下数据不丢失。假如一次写入之后发生了宕机，即使所有缓存中的数据丢失，也可以通过恢复日志还原出丢失的数据
+>+ 持久化等级
 >   + HBase中可以通过设置WAL的持久化等级决定是否开启WAL机制以及HLog的落盘方式。WAL的持久化等级分为如下四个等级
 >     + SKIP_WAL：只写缓存，不写HLog日志
 >     + ASYNC_WAL：异步将数据写入到HLog日志中
@@ -503,8 +617,8 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 >     + USER_DEFAULT：默认如果用户没有指定持久化等级，HBase使用SYNC_WAL持久化等级
 >   + put.setDurability(Durability.SYNC_WAL)
 
-> **HFile物理结构**
->
+**HFile物理结构**
+
 > + ![image-20200518135906717](.\image\HFile物理结构.png)
 
 ## HBase Shell
@@ -516,14 +630,7 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 >       -XX:+PrintGCDetails -Xloggc:$HBASE_HOME/logs/gc-hbase.log" ./bin/hbase shell
 >     ```
 
-## Compaction
 
-> Minor Compaction
-
-> Major Compaction
->
-> + 删除过期时间【TTl】
-> + 删除墓碑标记的数据【*tombstone* 】
 
 ## 避免数据热点常用技术
 
@@ -537,7 +644,7 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 
 ## 优化
 
-> + 尝试最小化rowKey大小长度、colimn Family名称长度、Qualifier名称长度【因为在DataBlock Index中也会保存数据的Key，而Key中包含ColumnFamily】
+> 尝试最小化rowKey大小长度、colimn Family名称长度、Qualifier名称长度【因为在DataBlock Index中也会保存数据的Key，而Key中包含ColumnFamily】
 
 ## TTL
 
