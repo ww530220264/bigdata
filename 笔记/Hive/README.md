@@ -284,7 +284,7 @@ constraint_specification:
     [, CONSTRAINT constraint_name FOREIGN KEY (col_name, ...) REFERENCES table_name(col_name, ...) DISABLE NOVALIDATE 
 ```
 
-## optimize 【调优】
+## 优化
 
 + ### join 优化
 
@@ -335,34 +335,23 @@ constraint_specification:
 
   + ```
     hadoop df -count /path/*  查看某个目录下各个文件大小
-    ```
-
-  + ```
     set hive.exec.reducers.bytes.per.reducer=1GB 根据输入数据大小确定reducer个数
-    ```
-
-  + ```
-    set mapred.reduce.tasks=3  设置使用的reducer的个数
-    ```
-
-  + ```
+set mapred.reduce.tasks=3  设置使用的reducer的个数
     set hive.exec.reducers.max=10 设置reducers的最大个数，以阻止某个查询消耗太多的reducers资源
     ```
+    
 
 + ### JVM重用
 
   + ```
     对于很多小文件或者很多task的场景时，开启JVM重用，配置一个JVM实例在同一个job中重新使用N次
-    ```
-
-  + ```
     mapred.job.reuse.jvm.num.tasks=10
-    ```
-
+```
+    
   + ```
     这个功能的缺点是，开启JVM重用将会一直占用使用到的集群资源，以便进行重用，直到任务完成后才能释放。
-    ```
-
+  ```
+  
 + ### 索引
 
   + bitmap索引
@@ -428,8 +417,6 @@ cluster by 		相当于cluster by same_col == distribute by same_col sort by same
     hive> select * from table_name tablesample(bucket x out of y on rand()) s;
     hive> select * from table_name tablesample(bucket x out of y on col_name) s;
     ```
-
-    
 
 + 数据块抽样
 

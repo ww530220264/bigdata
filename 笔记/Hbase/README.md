@@ -646,6 +646,8 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 
 > 尝试最小化rowKey大小长度、colimn Family名称长度、Qualifier名称长度【因为在DataBlock Index中也会保存数据的Key，而Key中包含ColumnFamily】
 
+> 建表时可以采取预分区策略，可以防止初次数据插入时的热点问题
+
 ## TTL
 
 ## API
