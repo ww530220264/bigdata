@@ -30,8 +30,13 @@ object STREAMING_1_Overview {
   }
 
   def _test = {
-    val stream = env.fromElements((1, 2), (1, 3), (2, 3), (2, 4), (3, 5), (3, 6))
-    stream.keyBy(0).sum(1).printToErr().setParallelism(1)
+    //    val stream = env.fromElements((1, 2), (1, 3), (2, 3), (2, 4), (3, 5), (3, 6))
+    //    stream.keyBy(0).sum(1).printToErr().setParallelism(1)
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env
+      .fromElements(Tuple1.apply("flink"), Tuple1.apply("spark"))
+      .filter(x => {!"flink".equals(x._1)}).map(x=>(x._1,1)).keyBy(0).sum(1).printToErr()
+//      .filter(!_._1.equals("flink")).map(x=>(x._1,1)).keyBy(0).sum(1).printToErr()
     env.execute()
   }
 
