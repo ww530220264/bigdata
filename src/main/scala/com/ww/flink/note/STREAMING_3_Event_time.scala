@@ -106,7 +106,7 @@ object STREAMING_3_Event_time {
 
   /**
    * 从SourceFunction中抽取Event-time时间戳 ctx.collectWithTimestamp
-   * 从SourceFunction中生成watermark ctx.emitWatermark
+   *  从SourceFunction中生成watermarkctx.emitWatermark
    */
   def _watermarker_sourceFunc = {
     /**

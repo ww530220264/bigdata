@@ -19,11 +19,11 @@ object BATCH_1_Overview {
   val env = ExecutionEnvironment.getExecutionEnvironment
 
   def main(args: Array[String]): Unit = {
-    _1 //扩展,支持匿名模式匹配
-    //  _2  //Example 输出Sink分区排序
-    //  _3  //MapPartition
-    //  _4  //Reduce/ReduceGroup
-    //  _5  //minBy/maxBy
+//    _1 //扩展,支持匿名模式匹配
+      _2  //Example 输出Sink分区排序
+//      _3  //MapPartition
+//      _4  //Reduce/ReduceGroup
+//      _5  //minBy/maxBy
     //  _6  //使用迭代,计算PI bulk iteration 大量的迭代,需要制定最大迭代次数
     //      //还有增量迭代
     //  _7  //FieldsForwardAnnotation
