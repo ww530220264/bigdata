@@ -21,20 +21,32 @@ object Tran_1_Stream_Example {
     //    task_1(env)
     //    keyBy(env)
     //    connect(env)
-//    minAndMinBy(env)
-    window(env)
+    //    minAndMinBy(env)
+    //    window(env)
+    reduce(env)
+  }
+
+  def reduce(env: StreamExecutionEnvironment): Unit = {
+    val eles = env.fromElements(1, 2, 3, 4, 5, 1, 3, 1, 1, 1, 2, 4, 5)
+    System.err.println(env.getParallelism + "-------------------")
+    val keyedStream = eles.keyBy(x => x)
+    System.err.println(keyedStream.parallelism + "-------------------")
+//    keyedStream.printToErr()
+    println("--------------------")
+    keyedStream.reduce(_+_).printToErr()
+    env.execute()
   }
 
   def window(env: StreamExecutionEnvironment): Unit = {
     env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
-    env.socketTextStream("centos7-1",9012)
-      .map(x=>{
+    env.socketTextStream("centos7-1", 9012)
+      .map(x => {
         val strings = x.split(" ")
-        (strings(0),strings(1).toInt)
+        (strings(0), strings(1).toInt)
       })
       .keyBy(0).window(TumblingEventTimeWindows.of(Time.seconds(5)))
-        .sum(1)
-        .printToErr()
+      .sum(1)
+      .printToErr()
 
     env.execute()
   }

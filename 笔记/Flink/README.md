@@ -1,3 +1,34 @@
+## 分布式运行时环境
+
+### Tasks and Operator Chains
+
+> 对于分布式执行，Flink会将Operator算子子任务链接到一起生成tasks，每个task将被一个thread执行
+>
+> **优化**：**将Operator链接到一起是一个有效的优化，它减少了线程间切换和缓冲的开销，提高了整体吞吐量的同时降低了延迟**【如果可能的话，默认是使用的】。**下图有5个subtask将被执行，因此将由5个并行的线程**
+>
+> ![Operator chaining into Tasks](.\image\tasks_chains.svg)
+>
+> **配置**：
+>
+> + StreamingExecutionEnvironment.disableOperatorChaining()：在整个Job中禁用chaining
+>
+> + eg
+>
+>   ```scala
+>   someStream.filter.map(...).startNewChain().map(...)
+>   someStream.map(...).disableChaining()
+>   //设置插槽共享组
+>   someStream.filter(...).slotSharingGroup("name")
+>   ```
+
+### JobMangers,TaskManagers,Clients
+
+### TaskSlots and Resources
+
+### State Backends
+
+### SavaPoints
+
 ## Accumulators & Counter
 
 > job中所有的Accumulator共享一个单独的namespace，因此可以在不动的operator function中使用相同的Accumulator，Flink内部会合并所有相同name的Accumulators
@@ -76,6 +107,8 @@
 
 ### Transformations
 
+https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operators/#datastream-transformations
+
 > **map**：DataStream-->DataStream
 
 > **flatMap**：DataStream-->DataStream
@@ -85,7 +118,7 @@
 > **keyBy**：DataStream-->KeyedStream
 >
 > ```
-> 逻辑上将流划分为不想交的分区，所有相同key的记录都分配给同一个分区。默认使用hash分区
+> 逻辑上将流划分为不相交的分区，所有相同key的记录都分配给同一个分区。默认使用hash分区
 > ```
 >
 > 不能作为key的类型：
@@ -95,67 +128,216 @@
 
 > **reduce**：KeyedStream-->DataStream
 
-> **min**
+> fold：KeyedStream-->DataStream
+
+> **min**：KeyedStream-->DataStream
 >
-> **minBy**
+> **minBy**：KeyedStream-->DataStream
 >
-> **max**
+> **max**：KeyedStream-->DataStream
+>
+> sum：KeyedStream-->DataStream
 
-### Paralle Dataflows
+> window：KeyedStream-->DataStream
+>
+> ```scala
+> DataStream.keyBy(0).window(TumblingEventTimeWindow.of(Time.seconds(5)))
+> ```
 
-+ ### One-to-one streams
+> windowAll：DataStream-->AllWindowedStream
+>
+> 在多数情况下，这是一种non-parallel transformation。windowAll operator将所有的元素聚集到一个任务中
+>
+> ```scala
+> dataStream.windowAll(TumblingEventTimeWindow.of(Time.seconds(5)))
+> ```
 
-+ ### Redistributing streams
+> 【Window】apply：WindowedStream-->DataStream：windowedStream.apply(WindowFunction)
+>
+> 【Window】apply：AllWindowedStream-->DataStream：allWindowedStream.apply(AllWindowFunction)
+>
+> 【Window】reduce：返回当前窗口中最后一个reduced的value
+>
+> 【Window】fold：返回当前窗口中最后一个folded的value
+>
+> 【Window】sum、min、minBy、max、maxBy
 
-  + keyBy-->repartition by hashing the key
-  + boradcast
-  + rebalance-->repartition randomly
+> union：DataStream*-->DataStream
+>
+> 【如果一个stream，union他自己的话，那么在result stream中每个element将出现两次】
 
-+ ### Setting Parallelism 【设置并行度】
+> 【Window】join：DataStream,DataStream-->DataStream：在指定的key和公共window上join两个dataStream：
+>
+> ```scala
+> dataStream.join(otherStream)
+>         .where(<key selector>)
+>         .equalTo(<key selector>)
+>         .window(TumblingEventTimeWindow.of(Time.seconds(5)))
+>         .apply(...)
+> ```
+>
+> 【Window】coGroup：DataStream,DataStream-->DataStream：在指定的key和公共window上coGroup两个dataStream
+>
+> ```scala
+> dataStream.coGroup(otherStream)
+>         .where(0).equalTo(1)
+>         .window(TumblingEventTimeWindow.of(Time.seconds(5)))
+>         .apply{}
+> ```
 
-  > 【除了client level和system level之外】，在调用setParallelism的地方也可以调用setMaxParallelism来指定最大并行度。
-  >
-  > 默认大致为operatorParallelism + (operatorParallelism / 2)，下限为128，上限为32768
-  >
-  > 如果将最大并行度设置为非常大可能会损害性能，因为某些状态后端必须保留可随键组数量扩展的内部数据结构（键组是可伸缩状态的内部实现机制）
+> connect：DataStream，DataStream-->ConnectedStreams
+>
+> ```scala
+> val connectedStream = someDataStream.connect(otherStream)
+> ```
+>
+> coMap：ConnectedStream-->DataStream
+>
+> ```scala
+> connectedStream.map(
+> 	(_:Int)=>true,
+>     (_:String)=>false
+> )
+> ```
+>
+> coFlatMap：ConnectedStream-->DataStream
+>
+> ```scala
+> connectedStream.flatMap(
+> 	(_:Int)=>true,
+>     (_:String)=>false
+> )
+> ```
 
-  + #### Operator Level：setParallelism(5)
+> split：DataStream-->SplitStream
+>
+> ```scala
+> val split = someDataStream.split(
+> 	(num:Int)=>{
+>         (num % 2) match{
+>             case 0 => List("even")
+>             case 1 => List("odd")
+>         }
+>     }
+> )
+> ```
+>
+> select：SplitStream-->DataStream
+>
+> ```scala
+> val even = split select "even"
+> val odd = split select "odd"
+> val all = split.select("even","odd")
+> ```
 
-  + #### Execution Environment Level：env.setParallelism(3)
+> iterate：DataStream-->IterativeStream-->DataStream
+>
+> ```scala
+> initialStream.iterate{
+> 	iteration=>{
+>         val iterationBody = iteration.map{/*do something*/}
+>         //前者将feedback、后者将被转发到下游
+>         (iterationBody.filter(_ > 0) , (iterationBody.filter))
+>     }
+> }
+> ```
 
+> assignTimestamps：DataStream-->DataStream
+>
+> ```scala
+> stream.assignTimestamps{timestampExtractor}
+> ```
+
+### One-to-one streams
+
+### Redistributing streams
+
+https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operators/#physical-partitioning
+
++ 逻辑分区
+
+  + keyBy【repartition by hashing the key】
+
++ 物理分区
+
+  + 自定义分区器
+
+    ```scala
+    dataStream.partitionCustom(partitioner,"someKey")
+    dataStream.partitionCustom(partitioner,0)
     ```
-    为所有的operators、data sources、data sinks设置并行度为3
+
+  + 随机分区【随机均匀的划分元素】
+
+    ```scala
+    dataStream.shuffle()
     ```
 
-  + #### Client Level
+  + 重平衡【Rebalance】【round-robin】【轮询】【**为每个分区创建相同的负载，对于存在数据倾斜的性能优化非常有用**】
 
-    + 命令行【-p】
+    ```scala
+    dataStream.rebalance()
+    ```
 
-      ```bash
-      ./bin/flink run -p 10 ../examples/*WordCount-java*.jar
-      ```
+  + 分区伸缩【Rescaling】
 
-    + 程序中
+    + 希望将每个source的parallel实例的数据扇出到下游算子的子集中来分配负载，但是又不希望完全的Rebalance，而rebalance方法是完全的rebalance。这种方式只需要本地数据传输，而不需要通过网络传输数据，具体取决于其他配置值，如果TaskManager的slot的数量
+
+    + eg：如果upstream operator的并行度为2，downstream operator的并行度为4，那么upstream operator的其中一个流中的元素将分发到下游的两个operator实例上，另一个流中的元素将分发到下游算子的另外两个operator的实例上。如果upstream operator并行度为4，downstream operator的并行度为2，那么upstream operator的其中两个流中的元素将分配到downstream中的一个operation上，upstream operator上的另外两个流中的元素将分配到downstream中的另外两个operation上。如果并行度不是彼此的倍数，那么一个或多个downstream operations将就有来自upstream operations的不通数量的输入
+
+      ![Checkpoint barriers in data streams](.\image\rescale.svg)
 
       ```scala
-      try {
-          PackagedProgram program = new PackagedProgram(file, args)
-          InetSocketAddress jobManagerAddress = RemoteExecutor.getInetFromHostport("localhost:6123")
-          Configuration config = new Configuration()
-      
-          Client client = new Client(jobManagerAddress, new Configuration(), program.getUserCodeClassLoader())
-      
-          // set the parallelism to 10 here
-          client.run(program, 10, true)
-      
-      } catch {
-          case e: Exception => e.printStackTrace
-      }
+      dataStream.rescale()
       ```
 
-  + #### System Level
++ boradcast【将元素广播到每个分区】
 
-    + 配置文件flink-conf.yaml中配置parallelism.default
+### Setting Parallelism 【设置并行度】
+
+> 【除了client level和system level之外】，在调用setParallelism的地方也可以调用setMaxParallelism来指定最大并行度。
+>
+> 默认大致为operatorParallelism + (operatorParallelism / 2)，下限为128，上限为32768
+>
+> 如果将最大并行度设置为非常大可能会损害性能，因为某些状态后端必须保留可随键组数量扩展的内部数据结构（键组是可伸缩状态的内部实现机制）
+
++ #### Operator Level：setParallelism(5)
+
++ #### Execution Environment Level：env.setParallelism(3)
+
+  ```
+  为所有的operators、data sources、data sinks设置并行度为3
+  ```
+
++ #### Client Level
+
+  + 命令行【-p】
+
+    ```bash
+    ./bin/flink run -p 10 ../examples/*WordCount-java*.jar
+    ```
+
+  + 程序中
+
+    ```scala
+    try {
+        PackagedProgram program = new PackagedProgram(file, args)
+        InetSocketAddress jobManagerAddress = RemoteExecutor.getInetFromHostport("localhost:6123")
+        Configuration config = new Configuration()
+    
+        Client client = new Client(jobManagerAddress, new Configuration(), program.getUserCodeClassLoader())
+    
+        // set the parallelism to 10 here
+        client.run(program, 10, true)
+    
+    } catch {
+        case e: Exception => e.printStackTrace
+    }
+    ```
+
++ #### System Level
+
+  + 配置文件flink-conf.yaml中配置parallelism.default
 
 ### Side Outputs
 
