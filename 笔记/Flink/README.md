@@ -23,37 +23,50 @@
 
 ### JobMangers,TaskManagers,Clients
 
++ JobManager【Master】
+
+  + 负责协调分布式Execution，调度tasks，协调checkpoint，协调从failure中恢复
+  + 至少有一个JobManager。HA设置将由多个JobManagers，其中一个是leader，其他的是standby
+
++ TaskManager【Worker】
+
+  + 负责执行dataflow中的tasks【更具体的说，是子任务】，且缓冲和交换数据流
+  + 至少有一个TaskManager
+  + 连接到JobManager，向他们申明自己是可用的，然后被分配工作
+
++ Client
+
+  + client不是runtime和程序执行的一部分，但是可以被用来准备和发送一个dataflow到JobManager。在这之后，client可以断开连接或者保存连接以接收进度报告。
+  + client要么作为触发执行的Java/Scala程序的一部分运行，要么在命令行中执行：./bin/flink run
+
+  ![The processes involved in executing a Flink dataflow](.\image\processes.svg)
+
 ### TaskSlots and Resources
+
++ 每个Worker【TaskManager】就是一个JVM进程，并且可以在单独的线程中执行一个或多个子任务
+
++ 为了控制一个Worker可以接受多少任务，一个Worker有了所谓的Task Slot【至少一个】
+
++ Task Slot
+
+  + 每个Task Slot代表TaskManager资源的一个自己。如果一个TaskManager有3个Task Slot，代表着将其1/3的托管内存【managed memory】专用于每个slot。将资源分档意味着子任务不会与其他Job中的子任务竞争managed memory，因为它有一定数量的Managed memory。需要注意的是，在这里没有CPU隔离，当前Slot只分离tasks的Managed memory
+  + 通过调整task slot的数量，可以定义subtasks是如何互相隔离的。如果一个TaskManager有一个Task Slot意味着每个task group运行在一个单独的JVM【eg：可以在一个单独的Container中启动】中。有多个Slots意味着更多的subtasks共享同一个JVM。在同一个JVM中的Tasks共享TCP连接【通过多路复用】和heartbeat消息。他们还可以共享数据集和数据结构，从而减少每个任务的开销
+
+  ![A TaskManager with Task Slots and Tasks](.\image\tasks_slots.svg)
+
+  + 默认情况下，Flink运行subtasks共享slots，即使他们是不同任务的subtasks，只要他们来自同一个Job。这可能会让一个slot可以容纳Job整个的Pipeline。允许slot share有两个主要的好处：
+
+    + Flink集群中所需的任务slot数量与Job中使用的最高的并行度完全相同。不需要计算一个program总共包含多少个tasks【具有不同的parallelism】
+
+    + 这样更容易获得更好的资源利用率，如果没有slot share，非密集型source、map子任务将阻塞和资源密集型window子任务一样多的资源。使用slot share的话，将上面例子中的并行度设置为6可以充分利用slotted资源，同时确保在TaskManager中公平的分配繁重的子任务：
+
+      ![TaskManagers with shared Task Slots](.\image\slot_sharing.svg)
+
+    + 根据经验，一个好的默认task slot数量应该是CPU核数，使用hyper-threading【超线程】，每个slot将占用2个或更多的hardware thread context
 
 ### State Backends
 
 ### SavaPoints
-
-## Accumulators & Counter
-
-> job中所有的Accumulator共享一个单独的namespace，因此可以在不动的operator function中使用相同的Accumulator，Flink内部会合并所有相同name的Accumulators
->
-> ```scala
-> val eles2 = env.fromElements(("b", 3)).map(new RichMapFunction[(String, Int), (String, Int)] {
->       private val numEles = new IntCounter()
->       override def open(parameters: Configuration): Unit = {
->         getRuntimeContext.addAccumulator("numEles", this.numEles)
->       }
->       override def map(value: (String, Int)): (String, Int) = {
->         this.numEles.add(1)
->         value
->       }
->     })
->     val client = env.executeAsync()
->     val result = client.getJobExecutionResult(this.getClass.getClassLoader).get()
->     val value = result.getAccumulatorResult("numEles").asInstanceOf[Int]
->     System.err.println(value)
-> ```
->
-> 
-
-+ IntCounter、LongCounter、DoubleCounter
-+ Histogram
 
 ## DataSet
 
@@ -383,6 +396,34 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/side_out
 
 + ### Iterate
 
+  + ```scala
+    initialStream.iterate{
+    	iteration=>{
+            val iterationBody = iteration.map{/*do something*/}
+            //前者将feedback、后者将被转发到下游
+            (iterationBody.filter(_ > 0) , (iterationBody.filter))
+        }
+    }
+    ```
+
+  + Bulk Iteration
+
+    ```scala
+    val initialStream = env.fromElements(0)
+    val count = initialStream.iteration(10000){
+        iterationInput: DataSet[Int]=>{
+            val result = iterationInput.map{i=>{
+                val x = Math.random()
+                val y = Math.randow()
+                i + (if (x*x + y*y < 1) 1 else 0)
+            }}
+        }
+    }
+    val result = count.map{c => c * 4 / 10000}
+    ```
+
+    
+
 + ### Delta Iterate
 
 ## Windows
@@ -397,7 +438,7 @@ https://flink.apache.org/news/2015/12/04/Introducing-windows.html
 >
 > Flink保证只删除基于时间的窗口，而不删除其他类型的窗口【global window】
 
-### Keyed Windows-No-Keyed Windows
+### Keyed Windows&No-Keyed Windows
 
 > **Keyed Windows是多个任务并行执行**
 >
@@ -1547,3 +1588,146 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/task_failure_re
 
 ### Restart Pipelined Region Failover Strategy
 
+## 传递参数到Functions
+
++ via constructor
+
+  ```scala
+  val toFilter = env.fromElement(1,2,3)
+  toFilter.filter(new MyFilter(2))
+  
+  class MyFilter(limit: Int) extends FilterFunction[Int]{
+      override def filter(value: Int): Boolean = {
+          value > limit
+      }
+  }
+  ```
+
++ via withParameters(Configuration)
+
+  ```scala
+  val toFilter = env.fromElements(1,2,3)
+  val c = new Configuration()
+  c.setInteger("limit",2)
+  
+  toFilter.filter(new RichFilterFunction[Int](){
+      var limit = 0
+     	override def open(config:Configuration): Unit = {
+          limit = config.getInteger("limit",0)
+      }
+      def filter(in: Int): Boolean = {
+          in > limit
+      }
+  }).withParameter(c)
+  ```
+
++ Globally via ExecutionConfig
+
+  ```scala
+  val env = ExecutionEnvironment.getExecutionEnvironment
+  val conf = new Configuration()
+  config.setString("myKey","myValue")
+  env.getConfig.setGlobalJobParameters(conf)
+  
+  public static final class Tokenizer extends RichFlatMapFunction<String,Tuple2<String,Integer>>{
+      private String myKey;
+      @Override
+      public void open(Configuration parameters) throws Exception{
+          super.open(parameters)
+          ExecutionConfig.GlobalJobParameters globalParams = getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
+          Configuration globConf = (Configuration)globalParams;
+          myKey = globConf.getString("myKey",null)
+      }
+      //and more...
+  }
+  ```
+
++ via command line arguments
+
+## 分布式缓存
+
+> 可用于共享包含静态外部数据【如dictionaries或机器学习的回归模型】的文件
+
+> 程序在其ExecutionEnvironment中将本地或远程文件系统【HDFS或S3】的文件或目录以特定名称注册为缓存文件。当程序执行时，Flink自动拷贝目录的文件到所有Workers的本地文件系统。然后用户函数可以查找指定名称下的文件或目录，并从Worker的本地文件系统中访问该文件或目录
+>
+> ```scala
+> val env = ExecutionEnvironment.getExecutionEnvironment
+> env.registerCachedFile("hdfs:///path/to/your/file","hdfsFile")
+> env.registerCachedFile("file:///path/to/exec/file","localExecFile",true)
+> 
+> val input: DataSet[String] = ...
+> val result: DataSet[Integer] = input.map(new MyMapper())
+> //...
+> env.execute()
+> 
+> class MyMapper extends RichMapFunction[String,Int]{
+>     override def open(config:Configration):Unit = {
+>         val myFile: File = getRuntimeContext.getDistributedCache.getFile("hdfsFile")
+>         //...
+>     }
+>     
+>     override def map(value: String): Int = {
+>         //...
+>     }
+> }
+> ```
+
+## Accumulators & Counter
+
+> job中所有的Accumulator共享一个单独的namespace，因此可以在不动的operator function中使用相同的Accumulator，Flink内部会合并所有相同name的Accumulators
+>
+> ```scala
+> val eles2 = env.fromElements(("b", 3)).map(new RichMapFunction[(String, Int), (String, Int)] {
+>    private val numEles = new IntCounter()
+>    override def open(parameters: Configuration): Unit = {
+>      getRuntimeContext.addAccumulator("numEles", this.numEles)
+>    }
+>    override def map(value: (String, Int)): (String, Int) = {
+>      this.numEles.add(1)
+>      value
+>    }
+>  })
+>  val client = env.executeAsync()
+>  val result = client.getJobExecutionResult(this.getClass.getClassLoader).get()
+>  val value = result.getAccumulatorResult("numEles").asInstanceOf[Int]
+>  System.err.println(value)
+> ```
+>
+
++ IntCounter、LongCounter、DoubleCounter
++ Histogram
+
+## Broadcast Variables
+
+> 广播变量允许将数据集提供给Operation的所有并行实例，以及operation的常规操作。这对于辅助数据集或依赖于数据的参数化非常有用。数据集将作为一个Collection在Operator处被访问
+
+> 通过withBroadcastSet(DataSet,String)方法注册
+>
+> 通过getRuntimeContext().getBroadcastVariable(String)方法在目标operator处访问
+>
+> ```scala
+> val toBroadcast = env.fromElements(1,2,3)
+> val data = env.fromElements("a","b")
+> 
+> data.map(new RichMapFunction[String,String](){
+>     var broadcastSet: Traversable[String] = null
+>     
+>     override def open(config: Configuration): Unit = {
+>         broadcastSet = getRuntimeContext().getBoradcastVariable[String]("broadcastSetName").asScala
+>     }
+>     
+>     override def map(value: String): String = {
+>         //...
+>     } 
+> }).withBroadcastSet(toBroadcast,"broadcastSetName")
+> ```
+
+> 注意：由于broadcast variable的内容保存在每个节点的内存中，因此不应该太大。对于标量之类的值可以简单的将参数作为函数闭包的一部分或者使用withParameters方法传入相关配置
+
+## 语义注解
+
+> 语义注解可以用来为function的行为提供提示。他们告诉系统函数读取和计算的是函数输入的哪些字段，以及哪些未修改的字段从输入转发到输出。语义注解是加快执行速度的一种强大手段，因为他们允许系统在多个操作之间重新使用排序顺序或分区。使用语义注解最终可以避免不必要的数据shuffle或不必要的排序，并显著提高程序的性能
+
+> 语义注解的使用是可选的。然而，在提供语义注解时保持保守是绝对重要的。不正确的语义注解将导致Flink对程序作出错误的假设，并可能最终导致不正确的结果。如果operator的行为不能明显的预测，则不应提供注解。需要仔细阅读相关文档
+
+### Forward Fields Annotation
