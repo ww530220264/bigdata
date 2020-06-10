@@ -145,11 +145,258 @@ select ... from table_name;
 
 ## function
 
-```
+### cast
+
+```sql
 cast (col as int)
 ```
 
-## aggregate function 【聚合函数】
+### collect_list   collect_set
+
+```sql
+select user_id,collect_list(subject_id) as list from s1 group by user_id order by size(list) desc, user_id limit 30;
+```
+
+### with cube
+
+```sql
+-- 数据
+withcube.f1     withcube.f2     withcube.f3     withcube.cnt
+A       A       B       1
+B       B       A       1
+A       A       A       2
+SELECT 
+f1,f2,f3,sum(cnt),
+GROUPING__ID,
+lpad(bin(cast(GROUPING__ID AS BIGINT)),3,'0') AS binary_str 
+FROM withCube GROUP BY f1,f2,f3 with cube ORDER BY GROUPING__ID;
+-- 结果
+f1      f2      f3      _c3     grouping__id    binary_str
+NULL    NULL    NULL    4       0       000
+A       NULL    NULL    3       1       001
+B       NULL    NULL    1       1       001
+NULL    A       NULL    3       2       010
+NULL    B       NULL    1       2       010
+A       A       NULL    3       3       011
+B       B       NULL    1       3       011
+NULL    NULL    A       3       4       100
+NULL    NULL    B       1       4       100
+A       NULL    B       1       5       101
+A       NULL    A       2       5       101
+B       NULL    A       1       5       101
+NULL    B       A       1       6       110
+NULL    A       B       1       6       110
+NULL    A       A       2       6       110
+A       A       A       2       7       111
+A       A       B       1       7       111
+B       B       A       1       7       111
+-- 和spark-sql对比
+-- 语句
+SELECT 
+f1,f2,SUM(cnt),
+GROUPING__ID,
+lpad(bin(cast(GROUPING__ID AS BIGINT)),2,'0') AS binary_str 
+FROM withCube GROUP BY f1,f2 with cube ORDER BY GROUPING__ID;
+-- hive结果
+f1      f2      _c2     grouping__id    binary_str
+NULL    NULL    4       0       00
+B       NULL    1       1       01
+A       NULL    3       1       01
+NULL    B       1       2       10
+NULL    A       3       2       10
+B       B       1       3       11
+A       A       3       3       11
+-- spark sql结果
+B       B       1       0       00
+A       A       3       0       00
+A       NULL    3       1       01
+B       NULL    1       1       01
+NULL    A       3       2       10
+NULL    B       1       2       10
+NULL    NULL    4       3       11
+-- 对比：GROUPING__ID相反
+```
+
+### with rollup
+
+```sql
+SELECT
+f1,f2,f3,
+SUM(cnt),
+GROUPING__ID,
+lpad(bin(cast(GROUPING__ID AS BIGINT)),3,'0') binary_str
+FROM withCube
+GROUP BY f1,f2,f3 with rollup ORDER BY GROUPING__ID;
+-- hive 结果
+f1      f2      f3      _c3     grouping__id    binary_str
+NULL    NULL    NULL    4       0       000
+B       NULL    NULL    1       1       001
+A       NULL    NULL    3       1       001
+B       B       NULL    1       3       011
+A       A       NULL    3       3       011
+B       B       A       1       7       111
+A       A       B       1       7       111
+A       A       A       2       7       111
+-- spark-sql
+A       A       A       2       0       000
+B       B       A       1       0       000
+A       A       B       1       0       000
+B       B       NULL    1       1       001
+A       A       NULL    3       1       001
+A       NULL    NULL    3       3       011
+B       NULL    NULL    1       3       011
+NULL    NULL    NULL    4       7       111
+-- 对比 GROUPING__ID相反
+```
+
+### WindowFunction
+
+```
+测试用户1       2019-10-02      7
+测试用户1       2019-10-03      6
+测试用户1       2019-10-05      4
+测试用户2       2019-10-01      3
+测试用户2       2019-10-04      3
+测试用户2       2019-10-06      4
+测试用户2       2019-10-07      5
+```
+
++ **lead**【filed,n,defaultValue】：取当前行后面的第n行的field字段的值，如果没有，取defaultValue
+
++ **lag**【filed,n,defaultValue】：取当前行前面的第n行的field字段的值，如果没有，取defaultValue
+
+  ```sql
+  select username,createtime,pv,
+  lag(pv,2,-9999) over (partition by username order by createtime) as lag_2,
+  lead(pv,1,-9999) over (partition by username order by createtime) as lead_1
+  from windowFunction;
+  -- 结果
+  username        createtime      pv      lag_2   lead_1
+  测试用户1       2019-10-02      7       -9999   6
+  测试用户1       2019-10-03      6       -9999   4
+  测试用户1       2019-10-05      4       7       -9999
+  测试用户2       2019-10-01      3       -9999   3
+  测试用户2       2019-10-04      3       -9999   4
+  测试用户2       2019-10-06      4       3       5
+  测试用户2       2019-10-07      5       3       -9999
+  ```
+
++ **first_value**【field】：默认取分组后第一行到当前行第一行的该字段的值
+
++ **last_value**【field】：默认取分组后第一行到当前行的最后一行【也就是当前行】的该字段的值
+
+  ```sql
+  select username,createtime,pv,
+  first_value(pv) over(partition by username order by createtime) as first_value,
+  first_value(pv) over(partition by username order by createtime rows between unbounded preceding and current row) as first_value_default,
+  first_value(pv) over(partition by username order by createtime rows between unbounded preceding and unbounded following) as first_value_all,
+  first_value(pv) over(partition by username order by createtime rows between 1 preceding and current row) as first_value_1,
+  last_value(pv) over(partition by username order by createtime) as last_value,
+  last_value(pv) over(partition by username order by createtime rows between unbounded preceding and current row) as last_value_default,
+  last_value(pv) over(partition by username order by createtime rows between unbounded preceding and unbounded following) as last_value_all,
+  last_value(pv) over(partition by username order by createtime rows between current row and 1 following) as last_value_1
+  from windowFunction;
+  -- 结果
+  username        createtime      pv      first_value     first_value_default     first_value_all first_value_1   last_value      last_value_default      last_value_all  last_value_1
+  测试用户1       2019-10-02      7       7       7       7       7       7       7       4       6
+  测试用户1       2019-10-03      6       7       7       7       7       6       6       4       4
+  测试用户1       2019-10-05      4       7       7       7       6       4       4       4       4
+  测试用户2       2019-10-01      3       3       3       3       3       3       3       5       3
+  测试用户2       2019-10-04      3       3       3       3       3       3       3       5       4
+  测试用户2       2019-10-06      4       3       3       3       3       4       4       5       5
+  测试用户2       2019-10-07      5       3       3       3       4       5       5       5       5
+  ```
+
++ SUM...
+
+  ```sql
+  select username,createtime,pv,
+  -- 不加Windwo子句默认是截止到当前行
+  sum(pv) over(partition by username order by createtime) as sum_default,
+  sum(pv) over(partition by username order by createtime rows between unbounded preceding and unbounded following) as sum_all,
+  sum(pv) over(partition by username) as sum_all_2,
+  sum(pv) over(partition by username order by createtime rows between 1 preceding and 1 following) as sum_1_1
+  from windowFunction;
+  -- 结果
+  username        createtime      pv      sum_default     sum_all sum_all_2       sum_1_1
+  测试用户1       2019-10-05      4       17      17      17      10
+  测试用户1       2019-10-03      6       13      17      17      17
+  测试用户1       2019-10-02      7       7       17      17      13
+  测试用户2       2019-10-07      5       15      15      15      9
+  测试用户2       2019-10-06      4       10      15      15      12
+  测试用户2       2019-10-04      3       6       15      15      10
+  测试用户2       2019-10-01      3       3       15      15      6
+  ```
+
+### Analytics Functions
+
++ row_number
+
++ rank
+
++ dense_rank
+
+  ```sql
+  select username,createtime,pv,
+  row_number() over(partition by username order by pv) as row_number,
+  rank() over(partition by username order by pv) as row_number,
+  dense_rank() over(partition by username order by pv) as dense_rank
+  from windowFunction;
+  -- 结果
+  username        createtime      pv      row_number      row_number      dense_rank
+  测试用户1       2019-10-05      4       1       1       1
+  测试用户1       2019-10-03      6       2       2       2
+  测试用户1       2019-10-02      7       3       3       3
+  测试用户2       2019-10-01      3       1       1       1
+  测试用户2       2019-10-04      3       2       1       1
+  测试用户2       2019-10-06      4       3       3       2
+  测试用户2       2019-10-07      5       4       4       3
+  ```
+
++ **cume_dist**：分组内小于等于当前值的行数/分组内总行数
+
++ **percent_rank**：分组内的rank-1/分组内总行数-1
+
+  ```sql
+  select username,createtime,pv,
+  rank() over(partition by username order by pv) as rank,
+  cume_dist() over(partition by username order by pv) as cume_dist,
+  percent_rank() over(partition by username order by pv) as percent_rank
+  from windowFunction;
+  -- 结果
+  username        createtime      pv      rank    cume_dist       percent_rank
+  测试用户1       2019-10-05      4       1       0.3333333333333333      0.0
+  测试用户1       2019-10-03      6       2       0.6666666666666666      0.5
+  测试用户1       2019-10-02      7       3       1.0     1.0
+  测试用户2       2019-10-01      3       1       0.5     0.0
+  测试用户2       2019-10-04      3       1       0.5     0.0
+  测试用户2       2019-10-06      4       3       0.75    0.6666666666666666
+  测试用户2       2019-10-07      5       4       1.0     1.0
+  ```
+
++ **ntile**【n】：在分组中将分组数据按照排序字段分为n份，如果不能均分，那么前面的将多一些，最后一个最少
+
+  ```sql
+  select username,createtime,pv,
+  ntile(1) over(partition by username order by pv) as ntile_1,
+  ntile(2) over(partition by username order by pv) as ntile_2,
+  ntile(3) over(partition by username order by pv) as ntile_3,
+  ntile(4) over(partition by username order by pv) as ntile_4
+  from windowFunction;
+  -- 结果
+  username        createtime      pv      ntile_1 ntile_2 ntile_3 ntile_4
+  测试用户1       2019-10-05      4       1       1       1       1
+  测试用户1       2019-10-03      6       1       1       2       2
+  测试用户1       2019-10-02      7       1       2       3       3
+  测试用户2       2019-10-01      3       1       1       1       1
+  测试用户2       2019-10-04      3       1       1       1       2
+  测试用户2       2019-10-06      4       1       2       2       3
+  测试用户2       2019-10-07      5       1       2       3       4
+  ```
+
+  
+
+### aggregate function 【聚合函数】
 
 ```
 -- 开启map段聚合，提升性能，但是会更消耗内存
@@ -160,7 +407,7 @@ hive> set hive.map.aggr=true;
 
 ![image-20200516113308473](.\image\聚合函数_2.png)
 
-## 表生成函数
+### 表生成函数
 
 ![image-20200516114228739](E:\workspace\bigdata\笔记\Hive\image\表生成函数.png)
 
@@ -169,7 +416,7 @@ hive> set hive.map.aggr=true;
   + ![image-20200516222132158](.\image\error_1.png)
   + ![image-20200516222229324](.\image\lateral_view.png)
 
-## UDF
+### UDF
 
 + ADD JAR
 
@@ -182,11 +429,11 @@ hive> set hive.map.aggr=true;
     describe function tmp_fun;
     ```
 
-## GenericUDF
+### GenericUDF
 
-## UDAF
+### UDAF
 
-## UDTF
+### UDTF
 
 ## 宏命令
 
@@ -197,8 +444,6 @@ struct  //struct<street:string,city:string>
 map		//map<string,float>
 array	//array<string
 ```
-
-
 
 ## command
 
@@ -333,25 +578,20 @@ constraint_specification:
 
 + ### 调整mapper和task个数
 
-  + ```
-    hadoop df -count /path/*  查看某个目录下各个文件大小
-    set hive.exec.reducers.bytes.per.reducer=1GB 根据输入数据大小确定reducer个数
-set mapred.reduce.tasks=3  设置使用的reducer的个数
-    set hive.exec.reducers.max=10 设置reducers的最大个数，以阻止某个查询消耗太多的reducers资源
-    ```
-    
+  ```
+  hadoop df -count /path/*  查看某个目录下各个文件大小
+  set hive.exec.reducers.bytes.per.reducer=1GB 根据输入数据大小确定reducer个数
+  set mapred.reduce.tasks=3  设置使用的reducer的个数
+  set hive.exec.reducers.max=10 设置reducers的最大个数，以阻止某个查询消耗太多的reducers资源
+  ```
 
 + ### JVM重用
 
-  + ```
-    对于很多小文件或者很多task的场景时，开启JVM重用，配置一个JVM实例在同一个job中重新使用N次
-    mapred.job.reuse.jvm.num.tasks=10
-```
-    
-  + ```
-    这个功能的缺点是，开启JVM重用将会一直占用使用到的集群资源，以便进行重用，直到任务完成后才能释放。
   ```
-  
+  对于很多小文件或者很多task的场景时，开启JVM重用，配置一个JVM实例在同一个job中重新使用N次
+  mapred.job.reuse.jvm.num.tasks=10
+  这个功能的缺点是，开启JVM重用将会一直占用使用到的集群资源，以便进行重用，直到任务完成后才能释放。
+  ```
 + ### 索引
 
   + bitmap索引

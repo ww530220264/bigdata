@@ -72,53 +72,124 @@
 
 ### Transformations
 
-> map
+> **map**：data.map{ x => x.toInt}
 
-> flatMap
+> **flatMap**：data.flatMap{ str => str.split(" ")}
 
-> mapPartition
+> **mapPartition**：data.mapPartition{ in => in map{ (_,1) } }
 
-> filter
+> **filter**：data.filter{ _ > 1000 }
 
-> reduce
+> **reduce**：data.reduce{ _ + _}
 
-> reduceGroup
+> reduceGroup：data.reduceGroup { elements => elements.sum }
 
-> aggregate
-
-> distinct
-
-> join
-
-> outerJoin
-
-> coGroup
-
-> cross
-
-> union
-
-> rebalance
-
-> partitionByHash
-
-> partitionByRange
-
-> partitionCustom
-
-> sortPartition
-
-> first
-
-> project
-
-> minBy
+> **aggregate**
 >
-> maxBy
+> ```scala
+> val input: DataSet[(Int,String,Double)] = //...
+> val output: DataSet[(Int,String,Double)] = input.aggregate(SUM,0).aggregate(MIN,2)
+> //or
+> input.sum(0).min(2)
+> ```
+
+> **distinct**：data.distinct()
+
+> **join**
+>
+> ```scala
+> val env = ExecutionEnvironment.getExecutionEnvironment
+> val ele1 = env.fromElements(("a", 1), ("b", 2), ("c", 3))
+> val ele2 = env.fromElements(("b", 1), ("c", 2), ("c", 3), ("d", 3))
+> ele1.join(ele2).where(0).equalTo(0) {
+>    (first, second) => {
+>         first + "....." + second
+>    }
+> }.printToErr()
+> ```
+
+> **outerJoin**
+>
+> ```scala
+> //left outer join
+> ele1.leftOuterJoin(ele2).where(0).equalTo(0) {
+>    (first, second) => {
+>         first + "....." + second
+>    }
+> }.printToErr()
+> //right outer join
+> ele1.rightOuterJoin(ele2).where(0).equalTo(0) {
+>    (first, second) => {
+>         first + "....." + second
+>    }
+> }.printToErr()
+> //full outer join
+> ele1.fullOuterJoin(ele2).where(0).equalTo(0) {
+>     (first, second) => {
+>         first + "....." + second
+>     }
+> }.printToErr()
+> ```
+
+> **coGroup**
+>
+> ```scala
+> val env = ExecutionEnvironment.getExecutionEnvironment
+> val ele1 = env.fromElements(("a", 1), ("b", 2), ("c", 3))
+> val ele2 = env.fromElements(("b", 1), ("c", 2), ("c", 3), ("d", 3))
+> ele1.coGroup(ele2).where(0).equalTo(0) {
+>   (first, second, out: Collector[String]) => {
+>     val fs = first.toList
+>     val ss = second.toList
+>     for (f <- fs) {
+>       for (s <- ss) {
+>         out.collect(f + "..." + s)
+>       }
+>     }
+>   }
+> }.printToErr()
+> //(b,2)...(b,1)
+> //(c,3)...(c,2)
+> //(c,3)...(c,3)
+> ```
+
+> **cross**：笛卡尔积
+>
+> ```scala
+> val env = ExecutionEnvironment.getExecutionEnvironment
+> val ele1 = env.fromElements(("a", 1), ("b", 2), ("c", 3))
+> val ele2 = env.fromElements(("b", 1), ("c", 2), ("c", 3), ("d", 3))
+> //((a,1),(b,1))、((a,1),(c,2))、((a,1),(c,3))、((a,1),(d,3))
+> //((b,2),(b,1))、((b,2),(c,2))、((b,2),(c,3))、((b,2),(d,3))
+> //((c,3),(b,1))、((c,3),(c,2))、((c,3),(c,3))、((c,3),(d,3))
+> ele1.cross(ele2).printToErr()
+> ```
+
+> **union**
+
+> **rebalance**
+
+> **partitionByHash**
+
+> **partitionByRange**
+
+> **partitionCustom**
+
+> **sortPartition**
+
+> **first**
+
+> **project**
+
+> **minBy**
+>
+> **maxBy**
 
 ## DataStream
 
 ### Transformations
+
+![640?wx_fmt=png](.\image\流转换.png)
 
 https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operators/#datastream-transformations
 
@@ -149,15 +220,15 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 >
 > **max**：KeyedStream-->DataStream
 >
-> sum：KeyedStream-->DataStream
+> **sum**：KeyedStream-->DataStream
 
-> window：KeyedStream-->DataStream
+> **window**：KeyedStream-->DataStream
 >
 > ```scala
 > DataStream.keyBy(0).window(TumblingEventTimeWindow.of(Time.seconds(5)))
 > ```
 
-> windowAll：DataStream-->AllWindowedStream
+> **windowAll**：DataStream-->AllWindowedStream
 >
 > 在多数情况下，这是一种non-parallel transformation。windowAll operator将所有的元素聚集到一个任务中
 >
@@ -165,21 +236,21 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 > dataStream.windowAll(TumblingEventTimeWindow.of(Time.seconds(5)))
 > ```
 
-> 【Window】apply：WindowedStream-->DataStream：windowedStream.apply(WindowFunction)
+> **【Window】apply**：WindowedStream-->DataStream：windowedStream.apply(WindowFunction)
 >
-> 【Window】apply：AllWindowedStream-->DataStream：allWindowedStream.apply(AllWindowFunction)
+> **【Window】apply**：AllWindowedStream-->DataStream：allWindowedStream.apply(AllWindowFunction)
 >
-> 【Window】reduce：返回当前窗口中最后一个reduced的value
+> **【Window】reduce**：返回当前窗口中最后一个reduced的value
 >
 > 【Window】fold：返回当前窗口中最后一个folded的value
 >
-> 【Window】sum、min、minBy、max、maxBy
+> **【Window】**sum、min、minBy、max、maxBy
 
-> union：DataStream*-->DataStream
+> **union**：DataStream*-->DataStream
 >
-> 【如果一个stream，union他自己的话，那么在result stream中每个element将出现两次】
+> **【如果一个stream，union他自己的话，那么在result stream中每个element将出现两次】**
 
-> 【Window】join：DataStream,DataStream-->DataStream：在指定的key和公共window上join两个dataStream：
+> **【Window】join**：DataStream,DataStream-->DataStream：在指定的key和公共window上join两个dataStream：
 >
 > ```scala
 > dataStream.join(otherStream)
@@ -189,7 +260,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 >         .apply(...)
 > ```
 >
-> 【Window】coGroup：DataStream,DataStream-->DataStream：在指定的key和公共window上coGroup两个dataStream
+> **【Window】coGroup**：DataStream,DataStream-->DataStream：在指定的key和公共window上coGroup两个dataStream
 >
 > ```scala
 > dataStream.coGroup(otherStream)
@@ -198,22 +269,22 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 >         .apply{}
 > ```
 
-> connect：DataStream，DataStream-->ConnectedStreams
+> **connect**：DataStream，DataStream-->ConnectedStreams
 >
 > ```scala
 > val connectedStream = someDataStream.connect(otherStream)
 > ```
 >
-> coMap：ConnectedStream-->DataStream
+> **coMap**：ConnectedStream-->DataStream
 >
 > ```scala
 > connectedStream.map(
 > 	(_:Int)=>true,
->     (_:String)=>false
+>     	(_:String)=>false
 > )
 > ```
 >
-> coFlatMap：ConnectedStream-->DataStream
+> **coFlatMap**：ConnectedStream-->DataStream
 >
 > ```scala
 > connectedStream.flatMap(
@@ -222,7 +293,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 > )
 > ```
 
-> split：DataStream-->SplitStream
+> **split**：DataStream-->SplitStream
 >
 > ```scala
 > val split = someDataStream.split(
@@ -235,7 +306,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 > )
 > ```
 >
-> select：SplitStream-->DataStream
+> **select**：SplitStream-->DataStream
 >
 > ```scala
 > val even = split select "even"
@@ -243,7 +314,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 > val all = split.select("even","odd")
 > ```
 
-> iterate：DataStream-->IterativeStream-->DataStream
+> **iterate**：DataStream-->IterativeStream-->DataStream
 >
 > ```scala
 > initialStream.iterate{
@@ -255,7 +326,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 > }
 > ```
 
-> assignTimestamps：DataStream-->DataStream
+> **assignTimestamps**：DataStream-->DataStream
 >
 > ```scala
 > stream.assignTimestamps{timestampExtractor}
@@ -420,6 +491,12 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/side_out
         }
     }
     val result = count.map{c => c * 4 / 10000}
+    ```
+
+  + Delta Iteration
+
+    ```scala
+    
     ```
 
     
