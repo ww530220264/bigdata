@@ -355,7 +355,7 @@ NULL    NULL    NULL    4       7       111
 
 + **cume_dist**：分组内小于等于当前值的行数/分组内总行数
 
-+ **percent_rank**：分组内的rank-1/分组内总行数-1
++ **percent_rank**：分组内的rank-1/分组内总行数-1【就是rank函数的结果，用重复，有间隔】
 
   ```sql
   select username,createtime,pv,
@@ -581,7 +581,7 @@ constraint_specification:
   ```
   hadoop df -count /path/*  查看某个目录下各个文件大小
   set hive.exec.reducers.bytes.per.reducer=1GB 根据输入数据大小确定reducer个数
-  set mapred.reduce.tasks=3  设置使用的reducer的个数
+  set mapreduce.job.reduces、mapred.reduce.tasks=3  设置使用的reducer的个数
   set hive.exec.reducers.max=10 设置reducers的最大个数，以阻止某个查询消耗太多的reducers资源
   ```
 
@@ -624,13 +624,13 @@ set hive.exec.dynamic.partition.mode=nostrict
 
   + ```
     【set hive.enforce.bucketiing=true】
-    如果没有设置这个属性，那么需要我们自己设置和分桶个数相匹配的reducer个数【set mapred.reduce.tasks=96】。
+    如果没有设置这个属性，那么需要我们自己设置和分桶个数相匹配的reducer个数【set mapreduce.job.reduces、mapred.reduce.tasks=96】
     ```
 
 + ### 优势
 
   + ```
-    因为桶的数量是固定的，所以他没有数据波动，桶对于数据抽样再合适不过。如果两个表都是按照user_id分桶的话，hive可以创建一个逻辑上正确的抽样。
+    因为桶的数量是固定的，所以他没有数据波动，桶对于数据抽样再合适不过。如果两个表都是按照user_id分桶的话，hive可以创建一个逻辑上正确的抽样
     ```
 
   + ```

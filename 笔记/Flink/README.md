@@ -49,7 +49,7 @@
 
 + Task Slot
 
-  + 每个Task Slot代表TaskManager资源的一个自己。如果一个TaskManager有3个Task Slot，代表着将其1/3的托管内存【managed memory】专用于每个slot。将资源分档意味着子任务不会与其他Job中的子任务竞争managed memory，因为它有一定数量的Managed memory。需要注意的是，在这里没有CPU隔离，当前Slot只分离tasks的Managed memory
+  + 每个Task Slot代表TaskManager资源的一个集合。如果一个TaskManager有3个Task Slot，代表着将其1/3的托管内存【managed memory】专用于每个slot。将资源分档意味着子任务不会与其他Job中的子任务竞争managed memory，因为它有一定数量的Managed memory。需要注意的是，在这里没有CPU隔离，当前Slot只分离tasks的Managed memory
   + 通过调整task slot的数量，可以定义subtasks是如何互相隔离的。如果一个TaskManager有一个Task Slot意味着每个task group运行在一个单独的JVM【eg：可以在一个单独的Container中启动】中。有多个Slots意味着更多的subtasks共享同一个JVM。在同一个JVM中的Tasks共享TCP连接【通过多路复用】和heartbeat消息。他们还可以共享数据集和数据结构，从而减少每个任务的开销
 
   ![A TaskManager with Task Slots and Tasks](.\image\tasks_slots.svg)
@@ -102,9 +102,9 @@
 > val ele1 = env.fromElements(("a", 1), ("b", 2), ("c", 3))
 > val ele2 = env.fromElements(("b", 1), ("c", 2), ("c", 3), ("d", 3))
 > ele1.join(ele2).where(0).equalTo(0) {
->    (first, second) => {
->         first + "....." + second
->    }
+>        (first, second) => {
+>             first + "....." + second
+>        }
 > }.printToErr()
 > ```
 
@@ -212,7 +212,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 
 > **reduce**：KeyedStream-->DataStream
 
-> fold：KeyedStream-->DataStream
+> **fold**：KeyedStream-->DataStream
 
 > **min**：KeyedStream-->DataStream
 >
@@ -242,7 +242,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 >
 > **【Window】reduce**：返回当前窗口中最后一个reduced的value
 >
-> 【Window】fold：返回当前窗口中最后一个folded的value
+> **【Window】fold**：返回当前窗口中最后一个folded的value
 >
 > **【Window】**sum、min、minBy、max、maxBy
 
@@ -289,7 +289,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 > ```scala
 > connectedStream.flatMap(
 > 	(_:Int)=>true,
->     (_:String)=>false
+>     	(_:String)=>false
 > )
 > ```
 
@@ -298,11 +298,11 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 > ```scala
 > val split = someDataStream.split(
 > 	(num:Int)=>{
->         (num % 2) match{
->             case 0 => List("even")
->             case 1 => List("odd")
+>             (num % 2) match{
+>                 case 0 => List("even")
+>                 case 1 => List("odd")
+>             }
 >         }
->     }
 > )
 > ```
 >
@@ -321,7 +321,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 > 	iteration=>{
 >         val iterationBody = iteration.map{/*do something*/}
 >         //前者将feedback、后者将被转发到下游
->         (iterationBody.filter(_ > 0) , (iterationBody.filter))
+>         (iterationBody.filter(_ > 0) , (iterationBody.filter(_ <= 0)))
 >     }
 > }
 > ```

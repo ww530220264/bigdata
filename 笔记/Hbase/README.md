@@ -16,7 +16,7 @@
 
 + ### 优点
 
-  + 减少IO
+  + 减少磁盘IO
   + 更有利于压缩【增量压缩】【前缀压缩】
   + NULL值不需要存储
 
@@ -218,7 +218,7 @@
 
 #### 本地性
 
-> HBase通过MemStore刷出或compaction事项Region数据的本地性
+> HBase通过MemStore刷出或compaction实现Region数据的本地性
 
 > 当一个RS失败的时候，另一个RS可能会被分配到一个没有本地StoreFile的Region，当新数据写到这个region或者表被compact且StoreFile被重写的时候，这些Region将会与RS建立本地性
 
@@ -260,11 +260,11 @@
   + 【OFFLINE parent Region】
     + 【1】RegionServer关闭parent Region并在本地数据结构中标记该parent Region为OFFLINE状态
     + 【2】在该状态下，该parent Region的客户端请求会抛出【NotServingRegionException】异常，客户端会使用一些退避原则进行重试，The closing region is flushed.
-  + RegionServer在.splits目录下回创建两个文件目录daughterA和daughterB并创建必要的数据。然后切分store files，即在parent Region中为每个store file创建两个引用文件【Reference files】，这些引用文件指向parent Region的文件
+  + RegionServer在.splits目录下会创建两个文件目录daughterA和daughterB并创建必要的数据。然后切分store files，即在parent Region中为每个store file创建两个引用文件【Reference files】，这些引用文件指向parent Region的文件
   + RegionServer在HDFS中创建实际的daughterA和daughter Region目录，然后把上面的引用文件分别移动到daughterA和daughterB Region目录下
-  + RegionServer发送一个put请求到.META.表，在.META.表中将parent Region标记为OFFLINE并添加daughter Regions信息。当clieng浏览.META.表的时候就会发现parent Region正在Split，但是在daughter Regions出现在.META.表之前客户端是看不到的。如果该PUT请求成功之后，parent Region将被实施SPLIT。如果该PUT请求成功之前RegionServer服务挂了，Master和下一个RegionServer将打开parennt Region并且清除这个region split的脏数据。如果.META.表数据更新了，Master仍然会回滚相应的region split信息
+  + RegionServer发送一个put请求到.META.表，在.META.表中将parent Region标记为OFFLINE并添加daughter Regions信息。当client浏览.META.表的时候就会发现parent Region正在Split，但是在daughter Regions出现在.META.表之前客户端是看不到的。如果该PUT请求成功之后，parent Region将被实施SPLIT。如果该PUT请求成功之前RegionServer服务挂了，Master和下一个RegionServer将打开parennt Region并且清除这个region split的脏数据。如果.META.表数据更新了，Master仍然会回滚相应的region split信息
   + RegionServer并行打开daughterA和B
-  + RegionServer添加daughterA和B到.META.表中，以及相关的region信息。【包含引用parent Region的切分区域daughterA和B此时为ONLINE状态】。在此之后，客户端可以发现新的daughterA和B regions并可以向他们发送请求。
+  + RegionServer添加daughterA和B到.META.表中，以及相关的region信息。【包含引用parent Region的切分区域，daughterA和B此时为ONLINE状态】。在此之后，客户端可以发现新的daughterA和B regions并可以向他们发送请求。
   + RegionServer更新zookeeper结点/hbase/region-in-transition/parent-region-name的状态为SPLIT，因此Master可以接收到通知。如果必要的话，balancer可以将daughter region重新分配到其他的RegionServers。【此时SPLIT TRANSACTION结束】
   + split之后,.META.表和HDFS仍然包含parent Region的引用信息。当子Region压缩重写的时候，这些引用文件将被移除。垃圾回收任务运行时会周期性的检查是否有daughter regions仍然引用parent Region的文件，如果不包含，那么parent Region将会被删除
 
@@ -277,7 +277,7 @@
 + 客户端发送merge RPC请求到Master
 + Master将这些Region一起移动到对Region负载更重的RS上，然后Master给RS发送合并请求
 + RS将合并操作作为一个本地事务运行
-  + 将待合并的Regions状态设置为OFFLINE，然后再文件系统中合并相应的Regions
+  + 将待合并的Regions状态设置为OFFLINE，然后在文件系统中合并相应的Regions
   + 从hbase:meta表中原子性的删除被合并的Region数据然后添加新的合并Region信息到hbase:meta表中
   + RS打开新的Region并向Master报告合并结果
 
@@ -388,7 +388,7 @@ flush 'region_name'
 
 > 该操作的结果是每个Store【ColumnFamily】产生一个单独的StoreFile
 >
-> 该操作会出来删除标记的数据和最大版本数据
+> 该操作会处理有删除标记的数据和最大版本数据
 
 > 默认每7天执行一次
 >
@@ -433,7 +433,7 @@ flush 'region_name'
     + 调用Htable类的close方法也会无条件的隐式触发刷写
   + 注意事项
     + 如果缓冲区的记录涉及到多行或多个regionServer，在与服务器通信时，会将缓冲区中的记录按regionServer分组，然后分别将各组数据传输到对应的regionServer服务器上
-    + 在调用Htable.put操作时，客户端会先把所有的 put操作插入到写缓冲区中，然后隐式的调用flushCache，在插入每个put实例的时候，客户端会检查Put实例，如果检查失败(比如Put实例为空)，将抛出异常，二前面检查通过的则会被添加到缓冲区
+    + 在调用Htable.put操作时，客户端会先把所有的 put操作插入到写缓冲区中，然后隐式的调用flushCache，在插入每个put实例的时候，客户端会检查Put实例，如果检查失败(比如Put实例为空)，将抛出异常，而前面检查通过的则会被添加到缓冲区
     + 在客户端检查通过后，服务器端处理put操作，在服务器端执行失败的put实例将继续保存在客户端本地写缓冲区中，可调用HTable的getWriterBuffer方法进行访问。客户端通过异常报告远程错误，可查询操作失败、出错的原因以及重试的次数。对于错误列族，服务器端重试次数自动设置为1，因为这是不可恢复的错误
     + 无法控制服务器端执行put的顺序
   + 全局配置
@@ -554,7 +554,7 @@ flush 'region_name'
 ## versions 【数据版本化】
 
 + 默认保留3个版本的数据【降序】
-+ 如果用户未指定单元格的时间戳的话，那么数据存入时有regionServer决定
++ 如果用户未指定单元格的时间戳的话，那么数据存入时由regionServer决定
 + scan和get操作只会返回最新包版本的数据
 + scan 'test', {VERSIONS=>3}
 
