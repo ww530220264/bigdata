@@ -22,9 +22,9 @@ object SparkStreaming_Kafka {
     val ssc = new StreamingContext(new SparkConf()
 //      .setMaster("local[3]")
             .setMaster("spark://wangwei:7077")
-      .setAppName("test-kafka"), Seconds(5))
+      .setAppName("test-kafka"), Seconds(10))
     ssc.sparkContext.setLogLevel("DEBUG")
-    ssc.sparkContext.addJar("E:\\\\workspace\\\\bigdata\\\\target\\\\sumEndPoint.jar")
+    ssc.sparkContext.addJar("E:\\workspace\\bigdata\\target\\sumEndPoint.jar")
 
     def producerConfiguration: Properties = {
       val props = new Properties()

@@ -13,14 +13,14 @@ object NetworkWordCount {
 //    }
 
     val sparkConf = new SparkConf().setAppName("NetworkWordCount")
-      .setMaster("spark://wangwei:7077")
-//      .setMaster("local[2]")
+//      .setMaster("spark://wangwei:7077")
+      .setMaster("local[2]")
     val ssc = new StreamingContext(sparkConf, Seconds(10))
-    ssc.sparkContext.addJar("E:\\workspace\\bigdata\\target\\sumEndPoint.jar")
+//    ssc.sparkContext.addJar("E:\\workspace\\bigdata\\target\\sumEndPoint.jar")
     val lines = ssc.socketTextStream("centos7-1", 9999.toInt, StorageLevel.MEMORY_ONLY_SER)
-    val words = lines.flatMap(_.split(" "))
-    val wordCounts = words.map(x => (x, 1)).reduceByKey(_ + _)
-    wordCounts.print()
+    lines.flatMap(_.split(" ")).print()
+//    val wordCounts = words.map(x => (x, 1)).reduceByKey(_ + _)
+//    wordCounts.print()
     ssc.start()
     ssc.awaitTermination()
   }
