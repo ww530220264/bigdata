@@ -12,7 +12,7 @@ import org.apache.spark._
 object SparkStreaming_Kafka {
   def main(args: Array[String]): Unit = {
     val kafkaParams = Map[String, String](
-      "bootstrap.servers" -> "centos7-1:9092",
+      "bootstrap.servers" -> "cdh2:9092",
       "group.id" -> "spark_streaming_3",
       "auto.offset.reset" -> "latest",
       "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
@@ -28,7 +28,7 @@ object SparkStreaming_Kafka {
 
     def producerConfiguration: Properties = {
       val props = new Properties()
-      props.put("bootstrap.servers", "centos7-1:9092")
+      props.put("bootstrap.servers", "cdh2:9092")
       props.put("value.serializer", classOf[StringSerializer].getName)
       props.put("key.serializer", classOf[StringSerializer].getName)
       props.put("acks", "all")
@@ -37,16 +37,19 @@ object SparkStreaming_Kafka {
 
     val kafkaStreams = KafkaUtils.createDirectStream(ssc,
       LocationStrategies.PreferConsistent,
-      ConsumerStrategies.Subscribe[String, String](Set("test"), kafkaParams))
+      ConsumerStrategies.Subscribe[String, String](Set("topic_1"), kafkaParams))
 
     kafkaStreams.foreachRDD(rdd => {
       val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
       rdd.map(x=>(x.value(),1)).foreachPartition(p => {
         val producer = new KafkaProducer[String, String](producerConfiguration)
         p.foreach({ case (k, v) =>
-          producer.send(new ProducerRecord[String, String]("test1", null, k + "--->" + v))
+          producer.send(new ProducerRecord[String, String]("topic_2", null, k + "--->" + v))
         })
       })
+      System.err.println(
+        s"""${Thread.currentThread().getName},
+           |准备提交offset:${offsetRanges}""".stripMargin)
       kafkaStreams.asInstanceOf[CanCommitOffsets].commitAsync(offsetRanges)
     })
     ssc.start()
