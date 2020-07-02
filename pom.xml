@@ -80,10 +80,19 @@
         </dependencies>
     </dependencyManagement>
     <dependencies>
+        <!-- Common -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.5</version>
+            <scope>${jars.scope}</scope>
+        </dependency>
+        <!-- Flume -->
         <dependency>
             <groupId>org.apache.flume</groupId>
             <artifactId>flume-ng-core</artifactId>
             <version>${flume.version}</version>
+            <scope>provided</scope>
         </dependency>
         <!-- ######################### MQTT 支持 #########################-->
         <dependency>
@@ -97,7 +106,7 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-client</artifactId>
             <version>${hbase.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
             <exclusions>
                 <exclusion>
                     <groupId>io.netty</groupId>
@@ -109,7 +118,7 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-server</artifactId>
             <version>${hbase.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- ######################### Hbase 支持 #########################-->
         <!-- Druid 连接池-->
@@ -191,20 +200,20 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-scala_${scala.version}</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-streaming-scala_${scala.version}</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- ######################### Flink WebUI 支持 #########################-->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-runtime-web_2.11</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- ######################### Flink WebUI 支持 #########################-->
 
@@ -213,13 +222,13 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-queryable-state-runtime_2.11</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-queryable-state-client-java</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- ######################### Flink State 支持 #########################-->
 
@@ -228,27 +237,27 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-table-api-scala-bridge_2.11</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- Either... (for the old planner that was available before Flink 1.9) -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-table-planner_2.11</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- or.. (for the new Blink planner) -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-table-planner-blink_2.11</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-table-common</artifactId>
             <version>${flink.version}</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- ######################### Flink Table  #########################-->
 
@@ -257,6 +266,7 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka-0.10_${scala.version}</artifactId>
             <version>${flink.version}</version>
+            <scope>provided</scope>
         </dependency>
         <!-- ######################### Flink Connector #########################-->
         <dependency>
@@ -270,7 +280,7 @@
             <groupId>org.openjdk.jol</groupId>
             <artifactId>jol-core</artifactId>
             <version>0.10</version>
-            <scope>${jars.scope}</scope>
+            <scope>provided</scope>
         </dependency>
         <!-- Add logging framework, to produce console output when running in the IDE. -->
         <!-- These dependencies are excluded from the application JAR by default. -->
