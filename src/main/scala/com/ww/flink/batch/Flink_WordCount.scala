@@ -3,11 +3,11 @@ package com.ww.flink.batch
 import org.apache.flink.api.scala.ExecutionEnvironment
 import org.apache.flink.api.scala._
 
-object WordCount {
+object Flink_WordCount {
 
   def main(args: Array[String]): Unit = {
     val env = ExecutionEnvironment.getExecutionEnvironment
-    val path: String = "W:\\workspace\\bigdata\\src\\main\\resources\\words.txt"
+    val path: String = "E:\\workspace\\bigdata\\src\\main\\resources\\words.txt"
     val output: String = "output_wordcount"
     val text = env.readTextFile(path)
     val counts = text.flatMap { x => x.toLowerCase.split("\\s+") }

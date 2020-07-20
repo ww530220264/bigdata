@@ -3,8 +3,8 @@ package com.ww.spark.streaming
 import java.sql.Timestamp
 import java.util.Properties
 
-import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.spark.{SparkConf, TaskContext}
 import org.apache.spark.sql.SparkSession
@@ -12,7 +12,6 @@ import org.apache.spark.api._
 import org.apache.spark.streaming._
 import org.apache.spark.streaming.kafka010._
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 object SparkStreaming_Kafka {
@@ -20,8 +19,8 @@ object SparkStreaming_Kafka {
   def main(args: Array[String]): Unit = {
 
     val sparkConf = new SparkConf()
-//      .setMaster("local[4]")
-            .setMaster("spark://wangwei:7077")
+      //      .setMaster("local[4]")
+      .setMaster("spark://wangwei:7077")
       .set("spark.streaming.backpressure.enabled", "true")
       .setAppName("test-kafka")
     val batchInterval = Seconds(5)
@@ -31,24 +30,24 @@ object SparkStreaming_Kafka {
     val ssc = new StreamingContext(sparkConf, batchInterval)
     ssc.sparkContext.setLogLevel("DEBUG")
     ssc.sparkContext.addJar("E:\\workspace\\bigdata\\target\\sumEndPoint.jar")
-    ssc.checkpoint("./opt/checkpoint")
+    ssc.checkpoint("./opt/checkpoint/SparkStreaming_Kafka")
 
     // kafkaConsumer参数
     val kafkaParams = Map[String, String](
-      "bootstrap.servers" -> "cdh2:9092",
-      "group.id" -> "spark_streaming_3",
-      "auto.offset.reset" -> "latest",
-      "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
-      "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
-      "auto.commit.enable" -> "false"
+      ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> "cdh2:9092",
+      ConsumerConfig.GROUP_ID_CONFIG -> "spark_streaming_3",
+      ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> "latest",
+      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.StringDeserializer",
+      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.StringDeserializer",
+      ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG -> "false"
     )
     // kafkaProducer参数
     val producerConfiguration: Properties = {
       val props = new Properties()
-      props.put("bootstrap.servers", "cdh2:9092")
-      props.put("value.serializer", classOf[StringSerializer].getName)
-      props.put("key.serializer", classOf[StringSerializer].getName)
-      props.put("acks", "all")
+      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "cdh2:9092")
+      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer].getName)
+      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer].getName)
+      props.put(ProducerConfig.ACKS_CONFIG, "all")
       props
     }
     // 生成广播变量
@@ -84,32 +83,17 @@ object SparkStreaming_Kafka {
         }
       })
       println(rdd.collect().mkString("---------------aaaaaa"))
-      println(offsetRanges+"------------bbbbbbbbbb")
+      println(offsetRanges + "------------bbbbbbbbbb")
+      // 窗口计算完成之后手动提交偏移量
+      // 该offsetRanges提交到DirectKafkaInputDStream的commitQueue中
+      // 然后下一次生成job的时候从commitQueue中获取到本次提交的offset进行异步提交
       kafkaStreams.asInstanceOf[CanCommitOffsets].commitAsync(offsetRanges)
     })
 
     ssc.start()
     ssc.awaitTermination()
-
   }
 
-  def test_2(): Unit = {
-    //    kafkaStreams.foreachRDD(rdd => {
-    //            val offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
-    //            rdd.map(x=>(x.value(),1)).foreachPartition(p => {
-    //              val producer = new KafkaProducer[String, String](producerConfiguration)
-    //              p.foreach({ case (k, v) =>
-    //                producer.send(new ProducerRecord[String, String]("topic_2", null, k + "--->" + v))
-    //              })
-    //            })
-    //            System.err.println(
-    //              s"""${Thread.currentThread().getName},
-    //                 |准备提交offset:${offsetRanges}""".stripMargin)
-    //            kafkaStreams.asInstanceOf[CanCommitOffsets].commitAsync(offsetRanges)
-    //          })
-    //          ssc.start()
-    //          ssc.awaitTermination()
-  }
 
   def test_3(): Unit = {
     //        val spark = SparkSession

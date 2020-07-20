@@ -19,11 +19,14 @@ object BATCH_1_Overview {
   val env = ExecutionEnvironment.getExecutionEnvironment
 
   def main(args: Array[String]): Unit = {
+    env.fromCollection(Seq(1,2,3,4))
+      .map((_,1))
+      .printToErr()
 //    _1 //扩展,支持匿名模式匹配
-      _2  //Example 输出Sink分区排序
-//      _3  //MapPartition
-//      _4  //Reduce/ReduceGroup
-//      _5  //minBy/maxBy
+    //      _2  //Example 输出Sink分区排序
+    //      _3  //MapPartition
+    //      _4  //Reduce/ReduceGroup
+    //      _5  //minBy/maxBy
     //  _6  //使用迭代,计算PI bulk iteration 大量的迭代,需要制定最大迭代次数
     //      //还有增量迭代
     //  _7  //FieldsForwardAnnotation
@@ -165,16 +168,19 @@ object BATCH_1_Overview {
     env.setParallelism(3)
     val ds = env.fromElements(Point(1, 2), Point(3, 2),
       Point(3, 4), Point(5, 6))
-    ds.filterWith {
-      case Point(x, _) => x > 1
-    }.reduceWith {
-      case (Point(x1, y1), Point(x2, y2)) => Point(x1 + y1, x2 + y2)
-    }.mapWith {
+    ds.mapWith {
       case Point(x, y) => (x, y)
-    }.flatMapWith {
-      case (x, y) => Seq("x" -> x, "y" -> y)
-    }.groupingBy {
-      case (id, _) => id
-    }.first(10).printToErr()
+    }.printToErr()
+    //    ds.filterWith {
+    //      case Point(x, _) => x > 1
+    //    }.reduceWith {
+    //      case (Point(x1, y1), Point(x2, y2)) => Point(x1 + y1, x2 + y2)
+    //    }.mapWith {
+    //      case Point(x, y) => (x, y)
+    //    }.flatMapWith {
+    //      case (x, y) => Seq("x" -> x, "y" -> y)
+    //    }.groupingBy {
+    //      case (id, _) => id
+    //    }.first(10).printToErr()
   }
 }
