@@ -82,7 +82,7 @@ hive> describe extended table_name partition(key1='v1',key2='v2');
 hive> load data [local] inpath 'path' [overwrite] into table table_name [partition(key1='v1',key2='v2')];
 hive> alter table table_name add partition(key1='v1',key2='v2') [location 'path']
 hive> alter table table_name partition(key1='v1',key2='v2') set location 'path';
-hive> alter table line_3 add if not exists partition(year='1') location '/test-for-		       hive/par/year=1'  partition(year='2') location '/test-for-hive/par/year=2';
+hive> alter table line_3 add if not exists partition(year='1') location '/test-for-hive/par/year=1'  partition(year='2') location '/test-for-hive/par/year=2';
 hive> alter table table_name drop if exists partition(year='1');
 hive> alter table table_name partition(key='value') [enable|disable] no_drop; //不允许删除
 hive> alter table table_name partition(key='value') [enable|disable] offline; //不允许查询
@@ -339,7 +339,7 @@ NULL    NULL    NULL    4       7       111
   ```sql
   select username,createtime,pv,
   row_number() over(partition by username order by pv) as row_number,
-  rank() over(partition by username order by pv) as row_number,
+  rank() over(partition by username order by pv) as rank,
   dense_rank() over(partition by username order by pv) as dense_rank
   from windowFunction;
   -- 结果

@@ -190,7 +190,7 @@
 
 + 每个MemStore【也就是Column Family】需要2M的大小，1000个Region而且每个Region有两个Column Family的话就需要4G的堆内存，在还没有存储数据的情况下都需要预分配这么多内存
 + 如果数据以相同数速率写入所有的Regions，全局内存的使用将会在Region过多而导致compaction时进行很小的刷出操作。要避免重写相同的数据很多次。当全局的Memstore的使用达到一个上限阈值，将会刷出包含最大MemStore数据量的Region，当刷出相应的MemStore使全局MemStore使用内存大小降到另一个下限阈值之下后，数据继续被写入，然后很快又会超过上限阈值，然后再刷出相应的Region的MemStore，如此反复。这就是限制Region数量的主要原因
-+ Master讨厌大量的Region，因为他需要花很多的实际分配和移动Regions。这也造成了对ZK的负载很大
++ Master讨厌大量的Region，因为他需要花很多的时间分配和移动Regions。这也造成了对ZK的负载很大
 + 在老的版本中，在很少的RegionServer中存放大量的Region时会增加存储文件的索引，并增加了堆内存的使用，对RegionServer的内存压力很大，还有可能造成OOM
 + 如果基于HBase运行MR job的话，一般一个Region一个map task，如果太少的Region不足以获得足够的task，如果大量的Region则会产生大量的task
 
@@ -262,7 +262,7 @@
     + 【2】在该状态下，该parent Region的客户端请求会抛出【NotServingRegionException】异常，客户端会使用一些退避原则进行重试，The closing region is flushed.
   + RegionServer在.splits目录下会创建两个文件目录daughterA和daughterB并创建必要的数据。然后切分store files，即在parent Region中为每个store file创建两个引用文件【Reference files】，这些引用文件指向parent Region的文件
   + RegionServer在HDFS中创建实际的daughterA和daughter Region目录，然后把上面的引用文件分别移动到daughterA和daughterB Region目录下
-  + RegionServer发送一个put请求到.META.表，在.META.表中将parent Region标记为OFFLINE并添加daughter Regions信息。当client浏览.META.表的时候就会发现parent Region正在Split，但是在daughter Regions出现在.META.表之前客户端是看不到的。如果该PUT请求成功之后，parent Region将被实施SPLIT。如果该PUT请求成功之前RegionServer服务挂了，Master和下一个RegionServer将打开parennt Region并且清除这个region split的脏数据。如果.META.表数据更新了，Master仍然会回滚相应的region split信息
+  + RegionServer发送一个put请求到.META.表，在.META.表中将parent Region标记为OFFLINE并添加daughter Regions信息。当client浏览.META.表的时候就会发现parent Region正在Split，但是在daughter Regions出现在.META.表之前客户端是看不到的。如果该PUT请求成功之后，parent Region将被实施SPLIT。如果该PUT请求成功之前RegionServer服务挂了，Master和下一个RegionServer将打开parent Region并且清除这个region split的脏数据。如果.META.表数据更新了，Master仍然会回滚相应的region split信息
   + RegionServer并行打开daughterA和B
   + RegionServer添加daughterA和B到.META.表中，以及相关的region信息。【包含引用parent Region的切分区域，daughterA和B此时为ONLINE状态】。在此之后，客户端可以发现新的daughterA和B regions并可以向他们发送请求。
   + RegionServer更新zookeeper结点/hbase/region-in-transition/parent-region-name的状态为SPLIT，因此Master可以接收到通知。如果必要的话，balancer可以将daughter region重新分配到其他的RegionServers。【此时SPLIT TRANSACTION结束】
@@ -599,7 +599,7 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 > + **获取行锁、Region更新共享锁**：HBase中使用行锁保证对同一行数据的更新都是互斥操作，用以保证更新的原子性，要么成功，要么失败
 > + **开启写事务**：获取write number，用于实现MVCC【多版本并发控制】，实现数据的非锁定读，在保证读写一致性的前提下提高读取性能
 > + **写缓存memstore**：HBase中每个列族都会对应一个store，用来存储该列族数据。每个store都会有个写缓存memstore，用于缓存写入数据。HBase不会直接将数据落盘，而是先写入缓存，等缓存满足一定的大小之后再一起落盘
-> + **Append HLog**：HBase使用WAL机制保证数据可靠性，即先写入日志再写缓存，即使发生宕机，也可以通过回放HLog日志还原出原始数据。该步骤就是讲数据构造为WALEdit对象，然后顺序写入HLog日志中，此时不需要执行sync操作，0.98版本采用了新的写线程模式实现HLog日志的写入，可以使得整个数据更新新能得到极大提升
+> + **Append HLog**：HBase使用WAL机制保证数据可靠性，即先写入日志再写缓存，即使发生宕机，也可以通过回放HLog日志还原出原始数据。该步骤就是将数据构造为WALEdit对象，然后顺序写入HLog日志中，此时不需要执行sync操作，0.98版本采用了新的写线程模式实现HLog日志的写入，可以使得整个数据更新能得到极大提升
 > + **释放行锁以及共享锁**
 > + **Sync HLog真正sync到HDFS**：在释放行锁之后执行sync操作是为了尽量减少持锁时间，提升写性能。如果sync失败，执行回滚操作将memstore中已经写入的数据移出
 > + **结束写事务**：此时该线程的更新操作才会对其他读请求可见，更新才实际生效。
@@ -607,7 +607,7 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 
 **WAL机制**
 
-> + WAL是一种高效的日志算法，几乎是所有非内存数据库提升写性能的不二法门，基本原理是在数据写入之前首先顺序写入日志，然后再写入缓存，等到缓存写满后在同一落盘。之所以能够提升写性能，是因为WAL将一次随机写转化为了一次顺序写+一次内存写，提升写性能的同事，WAL可以保证数据的可靠性，即在任何情况下数据不丢失。假如一次写入之后发生了宕机，即使所有缓存中的数据丢失，也可以通过恢复日志还原出丢失的数据
+> + WAL是一种高效的日志算法，几乎是所有非内存数据库提升写性能的不二法门，基本原理是在数据写入之前首先顺序写入日志，然后再写入缓存，等到缓存写满后在同一落盘。之所以能够提升写性能，是因为WAL将一次随机写转化为了一次顺序写+一次内存写，提升写性能的同时，WAL可以保证数据的可靠性，即在任何情况下数据不丢失。假如一次写入之后发生了宕机，即使所有缓存中的数据丢失，也可以通过恢复日志还原出丢失的数据
 >+ 持久化等级
 >   + HBase中可以通过设置WAL的持久化等级决定是否开启WAL机制以及HLog的落盘方式。WAL的持久化等级分为如下四个等级
 >     + SKIP_WAL：只写缓存，不写HLog日志
@@ -629,8 +629,6 @@ alter 'stu_tmp',METHOD=>'table_att_unset',NAME=>'coprocessor$1'
 >     HBASE_SHELL_OPTS="-verbose:gc -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCDateStamps \
 >       -XX:+PrintGCDetails -Xloggc:$HBASE_HOME/logs/gc-hbase.log" ./bin/hbase shell
 >     ```
-
-
 
 ## 避免数据热点常用技术
 

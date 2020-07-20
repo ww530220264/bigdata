@@ -32,7 +32,7 @@
 
   + 负责执行dataflow中的tasks【更具体的说，是子任务】，且缓冲和交换数据流
   + 至少有一个TaskManager
-  + 连接到JobManager，向他们申明自己是可用的，然后被分配工作
+  + 连接到JobManager，向他们声明自己是可用的，然后被分配工作
 
 + Client
 
@@ -367,7 +367,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/operator
 
     + 希望将每个source的parallel实例的数据扇出到下游算子的子集中来分配负载，但是又不希望完全的Rebalance，而rebalance方法是完全的rebalance。这种方式只需要本地数据传输，而不需要通过网络传输数据，具体取决于其他配置值，如果TaskManager的slot的数量
 
-    + eg：如果upstream operator的并行度为2，downstream operator的并行度为4，那么upstream operator的其中一个流中的元素将分发到下游的两个operator实例上，另一个流中的元素将分发到下游算子的另外两个operator的实例上。如果upstream operator并行度为4，downstream operator的并行度为2，那么upstream operator的其中两个流中的元素将分配到downstream中的一个operation上，upstream operator上的另外两个流中的元素将分配到downstream中的另外两个operation上。如果并行度不是彼此的倍数，那么一个或多个downstream operations将就有来自upstream operations的不通数量的输入
+    + eg：如果upstream operator的并行度为2，downstream operator的并行度为4，那么upstream operator的其中一个流中的元素将分发到下游的两个operator实例上，另一个流中的元素将分发到下游算子的另外两个operator的实例上。如果upstream operator并行度为4，downstream operator的并行度为2，那么upstream operator的其中两个流中的元素将分配到downstream中的一个operation上，upstream operator上的另外两个流中的元素将分配到downstream中的另外两个operation上。如果并行度不是彼此的倍数，那么一个或多个downstream operations将就有来自upstream operations的不同数量的输入
 
       ![Checkpoint barriers in data streams](.\image\rescale.svg)
 
@@ -485,7 +485,7 @@ https://ci.apache.org/projects/flink/flink-docs-release-1.10/dev/stream/side_out
         iterationInput: DataSet[Int]=>{
             val result = iterationInput.map{i=>{
                 val x = Math.random()
-                val y = Math.randow()
+                val y = Math.random()
                 i + (if (x*x + y*y < 1) 1 else 0)
             }}
         }
