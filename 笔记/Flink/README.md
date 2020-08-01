@@ -58,7 +58,7 @@
 
     + Flink集群中所需的任务slot数量与Job中使用的最高的并行度完全相同。不需要计算一个program总共包含多少个tasks【具有不同的parallelism】
 
-    + 这样更容易获得更好的资源利用率，如果没有slot share，非密集型source、map子任务将阻塞和资源密集型window子任务一样多的资源。使用slot share的话，将上面例子中的并行度设置为6可以充分利用slotted资源，同时确保在TaskManager中公平的分配繁重的子任务：
+    + 这样更容易获得更好的资源利用率，如果没有slot share，非密集型任务(source、map子任务)将占用和资源密集型任务( keyAggregation/sink/window子任务一样多的资源。使用slot share的话，将上面例子中的并行度设置为6可以充分利用slotted资源，同时确保在TaskManager中公平的分配繁重的子任务：
 
       ![TaskManagers with shared Task Slots](.\image\slot_sharing.svg)
 
